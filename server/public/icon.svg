@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Genshin Map Overlay: goldener Kartenpin mit Primogem-Stern über einer gefalteten Karte, auf himmelblauem Grund.
+       Quelle für assets/icon.png und server/public/icon.png (gerendert mit sharp). -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fcbff"/>
+      <stop offset="0.55" stop-color="#4f8fe0"/>
+      <stop offset="1" stop-color="#2c5fb4"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.3" cy="0.18" r="0.6">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffeaa8"/>
+      <stop offset="0.5" stop-color="#f3c45a"/>
+      <stop offset="1" stop-color="#d6922a"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7cc4ff"/>
+      <stop offset="0.5" stop-color="#3f86e6"/>
+      <stop offset="1" stop-color="#8a7cf0"/>
+    </linearGradient>
+    <path id="star" d="M0-1Q.14-.14 1 0Q.14 .14 0 1Q-.14 .14-1 0Q-.14-.14 0-1Z"/>
+  </defs>
+
+  <!-- Grund mit feinem goldenem Innenrahmen -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#sky)"/>
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#shine)"/>
+  <rect x="32" y="32" width="448" height="448" rx="100" fill="none" stroke="#ffe7ad" stroke-opacity="0.6" stroke-width="5"/>
+
+  <!-- Funkelsterne -->
+  <use href="#star" transform="translate(112 118) scale(24)" fill="#fff"/>
+  <use href="#star" transform="translate(404 104) scale(30)" fill="#ffe7ad"/>
+  <use href="#star" transform="translate(424 178) scale(13)" fill="#fff" fill-opacity="0.85"/>
+
+  <!-- Gefaltete Karte -->
+  <g stroke="#b9853a" stroke-width="7" stroke-linejoin="round">
+    <path d="M92 266 203 244 203 400 92 422Z" fill="#fff7e2"/>
+    <path d="M203 244 309 266 309 422 203 400Z" fill="#f1ddae"/>
+    <path d="M309 266 420 244 420 400 309 422Z" fill="#fff7e2"/>
+  </g>
+  <path d="M108 326c8-24 46-30 66-14s8 42-20 46-54-10-46-32z" fill="#cde4a0"/>
+  <path d="M334 352c6-16 34-20 48-8s4 30-14 32-40-8-34-24z" fill="#cde4a0"/>
+  <path d="M120 388C160 352 196 392 236 362S318 318 392 300" fill="none" stroke="#3f86e6" stroke-width="9" stroke-linecap="round" stroke-dasharray="1 20"/>
+  <path d="M376 288l20 20M396 288l-20 20" stroke="#e0603a" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Schatten unter dem Pin -->
+  <ellipse cx="256" cy="350" rx="44" ry="11" fill="#2b3656" fill-opacity="0.28"/>
+
+  <!-- Pin: weißer Sticker-Rand, goldener Körper, Primogem-Stern im Kopf -->
+  <path d="M256 346C234 304 160 252 160 186A96 96 0 1 1 352 186C352 252 278 304 256 346Z" fill="url(#gold)" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+  <circle cx="256" cy="186" r="60" fill="#fffaf0"/>
+  <use href="#star" transform="translate(256 186) scale(47)" fill="url(#gem)"/>
+  <use href="#star" transform="translate(256 186) scale(18)" fill="#fff" fill-opacity="0.9"/>
+  <ellipse cx="206" cy="132" rx="20" ry="10" transform="rotate(-38 206 132)" fill="#fff" fill-opacity="0.55"/>
+</svg>

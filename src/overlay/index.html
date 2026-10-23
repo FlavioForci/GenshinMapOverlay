@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'">
+  <title>Genshin Map Overlay</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <!-- data-i18n*: Texte kommen zur Laufzeit (shared/i18n.js) -->
+  <canvas id="markers"></canvas>
+
+  <div id="tooltip" class="tooltip" hidden>
+    <strong id="tooltip-name"></strong>
+    <span id="tooltip-hint"></span>
+  </div>
+
+  <div id="hud" class="hud" hidden>
+    <span id="hud-text"></span>
+    <span class="hud-bar"><span id="hud-progress"></span></span>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <button id="panel-handle" class="panel-handle" type="button" hidden data-i18n-title="ui.handleTitle" data-i18n-aria="ui.handleTitle">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
+    <span data-i18n="ui.handle"></span>
+  </button>
+
+  <!-- Fundort-Karte: Fotos/Video aus den Kommentaren zum angeklickten Marker -->
+  <aside id="spot" class="panel spot" aria-live="polite">
+    <header class="panel-head">
+      <div class="title">
+        <img id="spot-icon" alt="" width="28" height="28">
+        <span id="spot-name"></span>
+      </div>
+      <button id="close-spot" class="close-btn" type="button" data-i18n-title="spot.close" data-i18n-aria="spot.close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.1 6.3 13.4 12l5.7 5.7-1.4 1.4-5.7-5.7-5.7 5.7-1.4-1.4 5.7-5.7-5.7-5.7 1.4-1.4 5.7 5.7 5.7-5.7z"/></svg>
+      </button>
+    </header>
+    <div id="spot-body" class="panel-scroll"></div>
+    <div class="spot-actions">
+      <button id="spot-found" class="gi-btn" type="button"></button>
+    </div>
+  </aside>
+
+  <aside id="panel" class="panel" data-i18n-aria="ui.title">
+    <header class="panel-head">
+      <div class="title">
+        <img src="../../assets/icon.png" alt="" width="22" height="22">
+        <span data-i18n="ui.title"></span>
+      </div>
+      <button id="close-panel" class="close-btn" type="button" data-i18n-title="ui.closePanel" data-i18n-aria="ui.closePanel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.1 6.3 13.4 12l5.7 5.7-1.4 1.4-5.7-5.7-5.7 5.7-1.4-1.4 5.7-5.7-5.7-5.7 1.4-1.4 5.7 5.7 5.7-5.7z"/></svg>
+      </button>
+    </header>
+
+    <div class="panel-scroll">
+      <div id="status" class="pill status" data-state="search">
+        <span class="dot"></span>
+        <span id="status-text"></span>
+      </div>
+
+      <div class="section-head"><h2 data-i18n="ui.sectionDisplay"></h2></div>
+      <label class="pill setting">
+        <span class="setting-name" data-i18n="ui.hideFound"></span>
+        <kbd id="kbd-found"></kbd>
+        <input id="hide-found" type="checkbox">
+      </label>
+      <label class="pill setting" data-i18n-title="ui.showInCapturesHint">
+        <span class="setting-name" data-i18n="ui.showInCaptures"></span>
+        <input id="show-captures" type="checkbox">
+      </label>
+      <label class="pill setting">
+        <span class="setting-name" data-i18n="ui.opacity"></span>
+        <output id="opacity-value" class="value-box"></output>
+        <input id="opacity" type="range" min="20" max="100" step="5">
+      </label>
+      <label class="pill setting">
+        <span class="setting-name" data-i18n="ui.size"></span>
+        <output id="size-value" class="value-box"></output>
+        <input id="size" type="range" min="14" max="48" step="2">
+      </label>
+
+      <div class="section-head">
+        <h2 data-i18n="ui.sectionMarkers"></h2>
+        <span id="enabled-count"></span>
+        <button id="none" class="link-btn" type="button" data-i18n="ui.none"></button>
+      </div>
+      <input id="search" class="search" type="search" data-i18n-placeholder="ui.search" autocomplete="off" spellcheck="false">
+      <div id="categories" class="categories"></div>
+    </div>
+
+    <footer class="panel-foot">
+      <div class="foot-row">
+        <span id="data-info" data-i18n="ui.loadingData"></span>
+        <button id="refresh" class="link-btn" type="button" data-i18n="ui.refresh"></button>
+      </div>
+      <div id="keys" class="keys"></div>
+    </footer>
+  </aside>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <img id="lightbox-img" alt="">
+    <span data-i18n="spot.lightboxClose"></span>
+  </div>
+
+  <script src="../shared/i18n.js"></script>
+  <script src="../shared/media.js"></script>
+  <script src="../shared/hud.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

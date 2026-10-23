@@ -1,0 +1,62 @@
+{
+  "name": "genshin-map-overlay",
+  "productName": "Genshin Map Overlay",
+  "version": "1.1.0",
+  "private": true,
+  "author": "Genshin Map Overlay",
+  "description": "Shows interactive map markers on the Genshin Impact in-game map via image recognition, without touching the game.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test:match": "node tools/match-test.js",
+    "dist": "electron-builder --win nsis",
+    "data:build": "node server/tools/build-data.js",
+    "data:import-comments": "node server/tools/import-comments.js",
+    "server:dev": "wrangler pages dev public --cwd server --port 8788",
+    "server:deploy": "wrangler pages deploy public --cwd server",
+    "data:import-icons": "node server/tools/import-icons.js",
+    "data:import-photos": "node server/tools/import-photos.js"
+  },
+  "build": {
+    "appId": "local.genshin-map-overlay",
+    "productName": "Genshin Map Overlay",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/@techstark/opencv-js/dist/opencv.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Genshin Map Overlay",
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "en_US"
+      ],
+      "language": "1033",
+      "include": "build/installer.nsh",
+      "artifactName": "GenshinMapOverlay-Setup-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.35.5",
+    "wrangler": "^4.152.0"
+  },
+  "dependencies": {
+    "@techstark/opencv-js": "^5.0.0-release.1"
+  }
+}

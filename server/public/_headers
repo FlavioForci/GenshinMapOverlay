@@ -1,0 +1,32 @@
+# Pages kombiniert alle passenden Regeln, darum Cache-Control pro Ordner statt für /data/*.
+# Gehashte Dateinamen ändern sich nie (immutable); nur manifest.json wird neu geladen.
+/data/*
+  Access-Control-Allow-Origin: *
+
+/data/manifest.json
+  Cache-Control: public, max-age=300
+
+/data/markers/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/reference/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/comments/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/icons/*
+  Cache-Control: public, max-age=604800
+
+/data/photos/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Schrift und Bilder der Webseite
+/fonts/*
+  Cache-Control: public, max-age=604800
+
+/img/*
+  Cache-Control: public, max-age=604800
+
+/video/*
+  Cache-Control: public, max-age=604800

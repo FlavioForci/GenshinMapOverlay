@@ -1,0 +1,10 @@
+node_modules/
+dist/
+server/public/data/
+server/cache/
+server/.wrangler/
+.wrangler/
+.claude/
+testbilder/
+reddit-post.md
+server/tools/import-*.js

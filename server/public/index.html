@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Genshin Map Overlay: every map marker on your in-game map</title>
+  <meta name="description" content="Free overlay for Genshin Impact: chests, oculi, puzzles and 690+ marker types right on your in-game map, with a photo of every spot. No game files touched.">
+  <meta property="og:title" content="Genshin Map Overlay">
+  <meta property="og:description" content="Every map marker right on your in-game map, with a photo of every spot. Free for Windows.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/icon.png">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" href="/icon.png" sizes="256x256">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
+  <script>
+    // Vor dem ersten Zeichnen, sonst springt die Sprache um.
+    (function () {
+      let saved = null;
+      try { saved = localStorage.getItem('lang'); } catch (e) {}
+      document.documentElement.lang = saved === 'de' ? 'de' : 'en';
+    })();
+  </script>
+  <style>
+    /* Niedliches, helles Design: Weiß als Grund, Gold und Himmelblau als Akzente, runde Formen.
+       Schrift Nunito liegt unter /fonts (kein Abruf bei Google).
+       Die Vorschau oben ist ein echtes Video aus dem Spiel. */
+    @font-face {
+      font-family: 'Nunito';
+      font-style: normal;
+      font-weight: 200 1000;
+      font-display: swap;
+      src: url('/fonts/nunito.woff2') format('woff2');
+    }
+    :root {
+      --bg: #ffffff;
+      --tint: #f2f7ff;
+      --ink: #2b3656;
+      --text: #46506b;
+      --muted: #6b7591;
+      --line: #e3e9f3;
+      --gold: #e3b65c;
+      --gold-ink: #94691f;
+      --gold-soft: #fff4dc;
+      --highlight: #ffe7ad;
+      --blue: #2f6bc6;
+      --blue-deep: #2559a8;
+      --blue-soft: #eaf2ff;
+      --pill: 999px;
+      --max: 1160px;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+
+    /* Zweisprachig: Elemente mit lang="en" / lang="de" werden je nach Sprache ein- oder ausgeblendet. */
+    html[lang="en"] body [lang="de"], html[lang="de"] body [lang="en"] { display: none !important; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 500 16.5px/1.65 "Nunito", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    img, svg { display: block; }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+    .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+    @media (max-width: 560px) { .wrap { padding: 0 16px; } }
+
+    /* Kleiner vierzackiger Stern als Schmuck vor Überschriften */
+    h2::before {
+      content: '';
+      display: inline-block;
+      width: 0.62em;
+      height: 0.62em;
+      margin-right: 0.4em;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23e3b65c' d='M12 0c.6 6.2 5.8 11.4 12 12-6.2.6-11.4 5.8-12 12-.6-6.2-5.8-11.4-12-12C6.2 11.4 11.4 6.2 12 0z'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    /* ---------- Navigation ---------- */
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 800; text-decoration: none; white-space: nowrap; }
+    .brand img { width: 30px; height: 30px; border-radius: 8px; }
+    .nav-links { display: flex; gap: 22px; margin-right: auto; }
+    .nav-links a { color: var(--muted); font-size: 15px; font-weight: 700; text-decoration: none; }
+    .nav-links a:hover { color: var(--blue); }
+    .nav-tools { display: flex; align-items: center; gap: 10px; }
+    @media (max-width: 860px) { .nav-links { display: none; } .nav .wrap { justify-content: space-between; } }
+    @media (max-width: 560px) {
+      .nav .wrap { gap: 12px; }
+      .brand { gap: 8px; font-size: 15px; }
+      .nav .btn-sm { padding: 0 10px; }
+      .nav .btn-sm .label { display: none; }
+    }
+
+    .lang {
+      display: flex;
+      padding: 3px;
+      border-radius: var(--pill);
+      background: var(--tint);
+    }
+    .lang button {
+      padding: 5px 11px;
+      border: 0;
+      border-radius: var(--pill);
+      background: transparent;
+      color: var(--muted);
+      font: 800 12px/1 inherit;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+    }
+    .lang button[aria-pressed="true"] { background: var(--blue); color: #fff; }
+
+    /* ---------- Knöpfe: rund, mit kleiner "Stufe" darunter ---------- */
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      height: 50px;
+      padding: 0 26px;
+      border: 0;
+      border-radius: var(--pill);
+      font-weight: 800;
+      font-size: 16px;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s, color 0.12s;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:active { transform: translateY(2px); }
+    .btn svg { width: 20px; height: 20px; flex: none; }
+    .btn-primary { background: var(--blue); color: #fff; box-shadow: 0 4px 0 #1f4f96; }
+    .btn-primary:hover { background: #3577d6; box-shadow: 0 6px 0 #1f4f96; }
+    .btn-primary:active { box-shadow: 0 1px 0 #1f4f96; }
+    .btn-gold { background: var(--gold-soft); color: var(--gold-ink); box-shadow: 0 4px 0 #f0d79f; }
+    .btn-gold:hover { box-shadow: 0 6px 0 #f0d79f; }
+    .btn-gold:active { box-shadow: 0 1px 0 #f0d79f; }
+    .btn-ghost { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 2px var(--line), 0 4px 0 var(--line); }
+    .btn-ghost:hover { color: var(--blue); }
+    .btn-ghost svg { color: #5865f2; }
+    .btn-sm { height: 36px; padding: 0 14px; font-size: 14px; box-shadow: inset 0 0 0 2px var(--line); }
+    .btn-sm:hover, .btn-sm:active { transform: none; }
+    .btn-sm svg { width: 18px; height: 18px; }
+
+    /* ---------- Hero: eine Szene wie im Spiel. Oben das Video, darunter Paimons Dialogfeld,
+       die Links sind die Antwortmöglichkeiten rechts ---------- */
+
+    .hero { padding: 44px 0 0; overflow-x: clip; }
+    .stage {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+      border: 6px solid #fff;
+      border-radius: 28px;
+      background: #1b2236;
+      box-shadow: 0 0 0 1px var(--line), 0 24px 60px rgba(43, 54, 86, 0.22);
+    }
+    /* Ausschnitt etwas hineingezoomt: obere Spielanzeige und die UID unten rechts fallen raus */
+    .stage video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 2.4 / 1;
+      object-fit: cover;
+      object-position: 50% 69%;
+      border-radius: 22px 22px 0 0;
+    }
+
+    .dialog {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 250px;
+      gap: 20px 32px;
+      align-items: end;
+      margin-top: -28px;
+      padding: 46px 28px 28px 204px;
+      border-radius: 0 0 22px 22px;
+      background: linear-gradient(180deg, rgba(27, 34, 54, 0), rgba(27, 34, 54, 0.94) 28px, #1b2236);
+      color: #fff;
+    }
+    .speaker { display: flex; align-items: center; gap: 10px; color: #f3d48b; font-size: 15px; font-weight: 900; letter-spacing: 0.03em; }
+    .speaker::after { content: ''; width: 72px; height: 1px; background: linear-gradient(90deg, #f3d48b, transparent); }
+    .dialog h1 { margin: 4px 0 8px; color: #fff; font-size: clamp(24px, 2.6vw, 30px); font-weight: 900; line-height: 1.15; text-wrap: balance; }
+    .dialog p { max-width: 34em; margin: 0; color: rgba(255, 255, 255, 0.78); font-size: 16px; }
+    /* Paimons Satz erscheint Buchstabe für Buchstabe (siehe Skript unten) */
+    .dialog .ch { opacity: 0; transition: opacity 0.12s; }
+    .dialog .ch.on { opacity: 1; }
+    /* Kleines Dreieck "weiter" wie im Spiel, scrollt zu den Funktionen */
+    .next {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      border: 7px solid transparent;
+      border-top: 9px solid #f3d48b;
+      border-bottom: 0;
+      opacity: 0;
+      transition: opacity 0.3s;
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .dialog.typed .next { opacity: 0.9; }
+    @keyframes bounce { 50% { transform: translateY(4px); } }
+
+    /* Paimon als Sprecherin links im Dialogfeld */
+    .paimon {
+      position: absolute;
+      left: 6px;
+      bottom: 4px;
+      width: 196px;
+      animation: float 5s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .paimon img { width: 100%; height: auto; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.35)); }
+    /* Paimon denkt an eine Truhe: Marker in ihrer Gedankenwolke */
+    .paimon .thought { position: absolute; left: 81.5%; top: 37%; width: 7.5%; aspect-ratio: 20 / 25; transform: translate(-50%, -50%); }
+    @keyframes float { 50% { transform: translateY(-8px); } }
+
+    /* Antwortmöglichkeiten wie im Spiel: runde Zeilen, beim Überfahren hell */
+    .choices { display: grid; gap: 10px; }
+    .choice {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 18px 8px 8px;
+      border-radius: var(--pill);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-weight: 800;
+      line-height: 1.25;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s, transform 0.12s;
+    }
+    .choice:hover { background: #fff; color: var(--ink); transform: translateX(4px); }
+    .choice i { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: #fff; color: #1b2236; }
+    .choice:hover i { background: var(--blue-soft); color: var(--blue); }
+    .choice svg { width: 18px; height: 18px; }
+    .choice small { display: block; font-size: 12.5px; font-weight: 600; opacity: 0.7; }
+    .choice.main { background: rgba(227, 182, 92, 0.2); box-shadow: inset 0 0 0 1px rgba(243, 212, 139, 0.7); }
+    .choice.main i { background: #f3d48b; }
+    .choice.main:hover { background: #fff; }
+
+    .hero-note { max-width: 1000px; margin: 16px auto 0; color: var(--muted); font-size: 14.5px; text-align: center; }
+    .hero-note strong { color: var(--ink); font-weight: 800; }
+
+    .spark { position: absolute; z-index: 3; color: var(--gold); animation: twinkle 3s ease-in-out infinite; }
+    .spark.s1 { top: -16px; right: 48px; width: 28px; height: 28px; }
+    .spark.s2 { top: 34px; right: -24px; width: 15px; height: 15px; color: #7fb2f0; animation-delay: 1s; }
+    .spark.s3 { top: -12px; left: 36px; width: 17px; height: 17px; color: #7fb2f0; animation-delay: 2s; }
+    @keyframes twinkle { 50% { transform: scale(0.6) rotate(20deg); opacity: 0.6; } }
+
+    @media (max-width: 900px) {
+      .hero { padding-top: 24px; }
+      .stage { border-width: 4px; border-radius: 22px; }
+      .stage video { aspect-ratio: 16 / 10; object-position: 0% 50%; border-radius: 18px 18px 0 0; }
+      .dialog { grid-template-columns: 1fr; margin-top: -32px; padding: 44px 18px 22px; border-radius: 0 0 18px 18px; }
+      .paimon { left: auto; right: 2px; bottom: auto; top: -96px; width: 118px; }
+      .next { display: none; }
+      .spark.s2 { right: 8px; }
+    }
+
+    /* Knopfreihe im Abschluss */
+    .cta { display: flex; flex-wrap: wrap; gap: 14px; }
+    @media (max-width: 560px) { .cta .btn { width: 100%; } }
+
+    /* ---------- Abschnitte: Überschrift links, Inhalt rechts, Zeilen mit gestrichelten Linien ---------- */
+
+    section.block { padding: 104px 0 0; }
+    .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 24px 64px; align-items: start; }
+    @media (max-width: 860px) { section.block { padding-top: 80px; } .cols { grid-template-columns: 1fr; } }
+    h2 { margin: 0 0 10px; color: var(--ink); font-size: clamp(27px, 3vw, 34px); font-weight: 900; line-height: 1.2; text-wrap: balance; }
+    .side p { margin: 0; max-width: 24em; color: var(--muted); }
+    .side a { color: var(--blue); font-weight: 700; }
+
+    /* Paimon mit Primogems unter der Einleitung, mit hellem Kreis dahinter */
+    .primos { margin-top: 36px; }
+    .primos img {
+      width: 210px;
+      height: auto;
+      margin-left: 8px;
+      background: radial-gradient(circle closest-side at 52% 55%, var(--gold-soft) 0 84%, transparent 85%);
+      filter: drop-shadow(0 10px 12px rgba(43, 54, 86, 0.16));
+      animation: float 5s ease-in-out infinite;
+      animation-delay: -2.5s;
+    }
+    .primos > div { margin-top: 18px; }
+    .primos b { display: inline; color: var(--blue); font-size: 20px; font-weight: 900; background: linear-gradient(transparent 62%, var(--highlight) 62% 90%, transparent 90%); }
+    .primos p { margin-top: 6px; }
+    @media (max-width: 860px) {
+      .primos { display: flex; align-items: center; gap: 16px; margin-top: 24px; }
+      .primos img { flex: none; width: 130px; margin: 0; }
+      .primos > div { margin-top: 0; }
+    }
+    .rows > * { border-top: 2px dashed var(--line); }
+    .rows > :last-child { border-bottom: 2px dashed var(--line); }
+
+    .features { margin: 0; }
+    .features > div { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 4px 32px; padding: 20px 0; }
+    @media (max-width: 640px) { .features > div { grid-template-columns: 1fr; } }
+    .features dt { color: var(--ink); font-weight: 800; }
+    .features dd { margin: 0; color: var(--muted); }
+
+    /* Drei Schritte nebeneinander, Nummer in einem hellblauen Kreis */
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin: 28px 0 0; padding: 0; list-style: none; counter-reset: step; }
+    @media (max-width: 860px) { .steps { grid-template-columns: 1fr; gap: 24px; } }
+    .steps li { counter-increment: step; }
+    .steps b { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; color: var(--ink); font-weight: 800; }
+    .steps b::before {
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-weight: 900;
+    }
+    .steps span { color: var(--muted); }
+    .steps kbd {
+      padding: 1px 8px;
+      border-radius: 6px;
+      background: var(--tint);
+      box-shadow: inset 0 0 0 1px var(--line), 0 2px 0 var(--line);
+      color: var(--ink);
+      font: 700 13px/1.4 "Cascadia Mono", Consolas, monospace;
+    }
+
+    .safe { margin-top: 88px; }
+    .checks { margin: 0; padding: 0; list-style: none; }
+    .checks li { display: flex; align-items: center; gap: 14px; padding: 14px 0; color: var(--ink); font-weight: 600; }
+    .checks li::before {
+      content: '';
+      flex: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--blue-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5 6.5 11.5 12.5 4.5' fill='none' stroke='%232f6bc6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 15px no-repeat;
+    }
+
+    /* ---------- Updates (neue Version oben ergänzen) ---------- */
+
+    .release { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 32px; padding: 22px 0; }
+    @media (max-width: 640px) { .release { grid-template-columns: 1fr; } }
+    .release header b { display: inline-block; padding: 1px 12px; border-radius: var(--pill); background: var(--blue-soft); color: var(--blue); font-size: 16px; font-weight: 900; }
+    .release header time, .release header span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; }
+    .release header .latest { display: inline-block; padding: 0 10px; border-radius: var(--pill); background: var(--gold-soft); color: var(--gold-ink); font-size: 12.5px; font-weight: 800; }
+    .release header .latest span { margin: 0; color: inherit; font-size: inherit; }
+    .release ul { margin: 0; padding-left: 18px; }
+    .release li + li { margin-top: 4px; }
+    .release li::marker { color: var(--gold); }
+
+    /* ---------- FAQ ---------- */
+
+    .faq summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 0;
+      color: var(--ink);
+      font-weight: 800;
+      cursor: pointer;
+      list-style: none;
+    }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary::after {
+      content: '+';
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1;
+      transition: background 0.12s, color 0.12s;
+    }
+    .faq details[open] summary::after { content: '\2212'; background: var(--blue); color: #fff; }
+    .faq summary:hover { color: var(--blue); }
+    .faq details > div { max-width: 42em; padding: 0 0 18px; color: var(--muted); }
+    .faq details > div p { margin: 0; }
+
+    /* ---------- Abschluss + Fußzeile ---------- */
+
+    .final { padding: 104px 0 0; }
+    .final .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px 48px; }
+    .final p { margin: 0; color: var(--muted); }
+
+    footer { margin-top: 72px; padding: 36px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+    footer .wrap { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+    @media (max-width: 760px) { footer .wrap { grid-template-columns: 1fr; } }
+    footer p { margin: 8px 0 0; max-width: 620px; }
+    .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .foot-links a { color: var(--blue); font-weight: 700; text-decoration: none; }
+    .foot-links a:hover { color: var(--blue-deep); text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <!-- SVG-Symbole: Logos, Marker in Paimons Gedankenwolke, Sterne -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-github" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
+    <symbol id="i-discord" viewBox="0 0 24 24"><path fill="currentColor" d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.058a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .078-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .079.009c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.076.076 0 0 0-.041.107c.36.698.772 1.363 1.225 1.993a.076.076 0 0 0 .084.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></symbol>
+    <symbol id="i-cup" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 8h12v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zm12 1h1.5a2.5 2.5 0 0 1 0 5H16M8 3v2m4-2v2"/></symbol>
+    <symbol id="pin" viewBox="-10 -15 20 25"><path d="M0-14c6 0 9 5 9 9 0 6-9 14-9 14s-9-8-9-14c0-4 3-9 9-9z" fill="#2b3142" stroke="#d3bc8e" stroke-width="1.6"/><path d="M0-9.5 3.5-6 0-2.5-3.5-6z" fill="#f2c44c"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path fill="currentColor" d="M12 0c.6 6.2 5.8 11.4 12 12-6.2.6-11.4 5.8-12 12-.6-6.2-5.8-11.4-12-12C6.2 11.4 11.4 6.2 12 0z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3C6.5 3 2 6.6 2 11c0 2.4 1.3 4.5 3.4 6l-.9 4 4.3-2.4c1 .3 2.1.4 3.2.4 5.5 0 10-3.6 10-8s-4.5-8-10-8z"/></symbol>
+  </svg>
+
+  <nav class="nav" aria-label="Main">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="/icon.png" alt="" width="30" height="30">Genshin Map Overlay</a>
+      <div class="nav-links">
+        <a href="#features"><span lang="en">Features</span><span lang="de">Funktionen</span></a>
+        <a href="#how"><span lang="en">How it works</span><span lang="de">So funktioniert’s</span></a>
+        <a href="#updates">Updates</a>
+        <a href="#faq">FAQ</a>
+      </div>
+      <div class="nav-tools">
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" data-lang="de" aria-pressed="false">DE</button>
+        </div>
+        <a class="btn btn-ghost btn-sm" data-link="discord" href="#" target="_blank" rel="noopener">
+          <svg aria-hidden="true"><use href="#i-discord"/></svg><span class="label">Discord</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div class="stage">
+          <video src="/video/preview.mp4" autoplay muted loop playsinline preload="auto" aria-label="Preview: a click on a marker on the in-game map opens its photo and video, then it gets marked as found."></video>
+          <div class="dialog">
+            <div class="paimon" aria-hidden="true">
+              <img src="/img/paimon.webp" alt="" width="464" height="454">
+              <svg class="thought"><use href="#pin"/></svg>
+            </div>
+            <div>
+              <div class="speaker">Paimon</div>
+              <h1><span lang="en">Every map marker, right on your in&#8209;game map!</span><span lang="de">Alle Marker, direkt auf deiner Ingame&#8209;Karte!</span></h1>
+              <p lang="en">Just press M and Paimon shows you chests, oculi, puzzles and 690 other marker types, each with a photo of the spot. And it never touches the game, Paimon promises!</p>
+              <p lang="de">Drück einfach M, und Paimon zeigt dir Truhen, Oculi, Rätsel und 690 weitere Markerarten, jeweils mit einem Foto vom Fundort. Und das Spiel wird nie angefasst, Paimon verspricht’s!</p>
+            </div>
+            <nav class="choices" aria-label="Download">
+              <a class="choice main" data-link="github" href="#" target="_blank" rel="noopener">
+                <i><svg aria-hidden="true"><use href="#i-github"/></svg></i>
+                <span><span lang="en">Download it for free</span><span lang="de">Kostenlos herunterladen</span><small>GitHub</small></span>
+              </a>
+              <a class="choice" data-link="kofi" href="#" target="_blank" rel="noopener">
+                <i><svg aria-hidden="true"><use href="#i-cup"/></svg></i>
+                <span><span lang="en">Get it on Ko-fi</span><span lang="de">Auf Ko-fi holen</span><small lang="en">Pay what you want</small><small lang="de">Zahl, was du möchtest</small></span>
+              </a>
+              <a class="choice" href="#how">
+                <i><svg aria-hidden="true"><use href="#i-chat"/></svg></i>
+                <span><span lang="en">How does it work?</span><span lang="de">Wie funktioniert das?</span></span>
+              </a>
+            </nav>
+            <a class="next" href="#features" aria-label="More"></a>
+          </div>
+          <svg class="spark s1" aria-hidden="true"><use href="#spark"/></svg>
+          <svg class="spark s2" aria-hidden="true"><use href="#spark"/></svg>
+          <svg class="spark s3" aria-hidden="true"><use href="#spark"/></svg>
+        </div>
+        <p class="hero-note" lang="en"><strong>Free for Windows 10 and 11.</strong> GitHub and Ko-fi have the same app. On Ko-fi you pay what you want and help keep the servers running.</p>
+        <p class="hero-note" lang="de"><strong>Kostenlos für Windows 10 und 11.</strong> Auf GitHub und Ko-fi gibt es dieselbe App. Auf Ko-fi zahlst du, was du möchtest, und hilfst, die Server am Laufen zu halten.</p>
+      </div>
+    </section>
+
+    <section class="block" id="features">
+      <div class="wrap cols">
+        <div class="side">
+          <h2><span lang="en">What it does</span><span lang="de">Was es kann</span></h2>
+          <p lang="en">The same markers as the web map, drawn onto the map you already have open in game.</p>
+          <p lang="de">Dieselben Marker wie auf der Webkarte, direkt auf der Karte, die du im Spiel sowieso offen hast.</p>
+          <div class="primos">
+            <img src="/img/paimon-primos.webp" alt="" width="414" height="429">
+            <div>
+              <b><span lang="en">Hunt your free Primos!</span><span lang="de">Hol dir deine Gratis-Primos!</span></b>
+              <p lang="en">Chests and puzzles all over Teyvat pay out Primogems. The overlay shows you where they are, so you don’t miss a single one.</p>
+              <p lang="de">Truhen und Rätsel in ganz Teyvat bringen Primogems. Das Overlay zeigt dir, wo sie sind, damit du keine verpasst.</p>
+            </div>
+          </div>
+        </div>
+        <dl class="features rows">
+          <div>
+            <dt><span lang="en">Markers on the in-game map</span><span lang="de">Marker auf der Ingame-Karte</span></dt>
+            <dd lang="en">Image recognition works out which part of Teyvat you’re looking at and puts every marker in the right spot, even while you drag and zoom.</dd>
+            <dd lang="de">Eine Bilderkennung findet heraus, welchen Teil von Teyvat du gerade siehst, und setzt jeden Marker an die richtige Stelle, auch beim Ziehen und Zoomen.</dd>
+          </div>
+          <div>
+            <dt><span lang="en">A photo of every spot</span><span lang="de">Ein Foto zu jedem Fundort</span></dt>
+            <dd lang="en">Click a marker to see the community’s top-voted photo of that spot. Some spots also have a video guide.</dd>
+            <dd lang="de">Klick auf einen Marker, und du siehst das beliebteste Foto der Community von dieser Stelle. Zu manchen Fundorten gibt es auch ein Video.</dd>
+          </div>
+          <div>
+            <dt><span lang="en">Track what you found</span><span lang="de">Abhaken, was du hast</span></dt>
+            <dd lang="en">Right-click a marker to mark it as found. One key hides everything you’ve found, and the panel shows your progress for each type.</dd>
+            <dd lang="de">Rechtsklick hakt einen Marker als gefunden ab. Mit einer Taste blendest du alle Gefundenen aus, und das Panel zeigt deinen Fortschritt pro Art.</dd>
+          </div>
+          <div>
+            <dt><span lang="en">690+ marker types</span><span lang="de">690+ Markerarten</span></dt>
+            <dd lang="en">Chests, puzzles, oculi, collectibles, materials and more, sorted into categories and searchable.</dd>
+            <dd lang="de">Truhen, Rätsel, Oculi, Sammlerstücke, Materialien und mehr, sortiert in Kategorien und durchsuchbar.</dd>
+          </div>
+          <div>
+            <dt><span lang="en">Hotkeys that work in game</span><span lang="de">Tasten, die im Spiel gehen</span></dt>
+            <dd lang="en">F7 toggles the overlay, F8 the panel, F9 found markers and F10 the opacity. You can also click the panel handle on the edge of the map.</dd>
+            <dd lang="de">F7 schaltet das Overlay, F8 das Panel, F9 die Gefundenen und F10 die Deckkraft. Du kannst auch auf den Griff am Kartenrand klicken.</dd>
+          </div>
+          <div>
+            <dt><span lang="en">Hidden from screenshots</span><span lang="de">Unsichtbar in Screenshots</span></dt>
+            <dd lang="en">The overlay doesn’t show up in your screenshots, recordings or streams. If you want to share it, you can switch that off.</dd>
+            <dd lang="de">Das Overlay taucht in Screenshots, Aufnahmen und Streams nicht auf. Wenn du es zeigen willst, schaltest du das ab.</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+    <section class="block" id="how">
+      <div class="wrap">
+        <h2><span lang="en">Setup takes about two minutes</span><span lang="de">In zwei Minuten eingerichtet</span></h2>
+        <ol class="steps">
+          <li>
+            <b><span lang="en">Install</span><span lang="de">Installieren</span></b>
+            <span lang="en">Run the setup and pick English or German. No admin rights needed.</span>
+            <span lang="de">Setup starten und Deutsch oder Englisch wählen. Admin-Rechte brauchst du nicht.</span>
+          </li>
+          <li>
+            <b><span lang="en">Don’t use fullscreen</span><span lang="de">Kein Vollbild</span></b>
+            <span lang="en">The easiest way is “Start Genshin borderless” in the tray menu, which looks just like fullscreen. Windowed mode in the game’s settings works too.</span>
+            <span lang="de">Am einfachsten über „Genshin randlos starten“ im Tray-Menü, das sieht aus wie Vollbild. Der Fenstermodus in den Spieleinstellungen geht auch.</span>
+          </li>
+          <li>
+            <b><span lang="en">Press</span><span lang="de">Drück</span> <kbd>M</kbd></b>
+            <span lang="en">Open the map in game. The markers show up on their own.</span>
+            <span lang="de">Öffne die Karte im Spiel. Die Marker erscheinen von selbst.</span>
+          </li>
+        </ol>
+
+        <div class="cols safe">
+          <div class="side">
+            <h2><span lang="en">What it never does</span><span lang="de">Was es nie macht</span></h2>
+            <p lang="en">HoYoverse doesn’t officially approve any overlay. A separate window that never touches the game is the lowest-risk way to build one.</p>
+            <p lang="de">HoYoverse gibt für Overlays grundsätzlich keine offizielle Freigabe. Ein eigenes Fenster ohne Zugriff aufs Spiel ist der risikoärmste Weg.</p>
+          </div>
+          <ul class="checks rows">
+            <li><span lang="en">Doesn’t read or change game memory</span><span lang="de">Liest und ändert keinen Spielspeicher</span></li>
+            <li><span lang="en">Doesn’t inject anything (no DLL, no graphics hook)</span><span lang="de">Schleust nichts ein (keine DLL, kein Grafik-Hook)</span></li>
+            <li><span lang="en">Doesn’t send keys or clicks to the game</span><span lang="de">Schickt keine Tasten oder Klicks ans Spiel</span></li>
+            <li><span lang="en">Only captures the screen, like OBS or Discord</span><span lang="de">Nimmt nur den Bildschirm auf, wie OBS oder Discord</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Neue Version oben ergänzen -->
+    <section class="block" id="updates">
+      <div class="wrap cols">
+        <div class="side">
+          <h2><span lang="en">What’s new</span><span lang="de">Was ist neu</span></h2>
+        </div>
+        <div class="rows">
+          <article class="release">
+            <header><b>v1.1</b><time datetime="2026-10-23" lang="en">Oct 23, 2026</time><time datetime="2026-10-23" lang="de">23.10.2026</time><span class="latest"><span lang="en">Latest</span><span lang="de">Aktuell</span></span></header>
+            <ul>
+              <li lang="en">Markers, photos and map recognition come from our own server. The first start takes seconds instead of one to two minutes.</li>
+              <li lang="de">Marker, Fotos und Kartenerkennung kommen vom eigenen Server. Der erste Start dauert Sekunden statt ein bis zwei Minuten.</li>
+              <li lang="en">Spot card: click a marker for the community’s top-voted photo of the spot, plus a video where there is one. Over 14,800 photos.</li>
+              <li lang="de">Fundort-Karte: Klick auf einen Marker zeigt das beliebteste Foto der Community, dazu ein Video, wo es eins gibt. Über 14.800 Fotos.</li>
+              <li lang="en">New look in the colors of the Genshin interface. It scales with your resolution, up to 4K.</li>
+              <li lang="de">Neues Design in den Farben der Genshin-Oberfläche. Es skaliert mit der Auflösung, bis 4K.</li>
+              <li lang="en">Markers show up as soon as the map opens and stay steady while the map stands still.</li>
+              <li lang="de">Marker erscheinen direkt beim Öffnen der Karte und stehen ruhig, solange die Karte stillsteht.</li>
+              <li lang="en">The game’s map buttons stay free. No markers over the quest list, zoom slider or close button.</li>
+              <li lang="de">Die Kartenknöpfe des Spiels bleiben frei. Keine Marker über Quest-Liste, Zoom-Regler oder X.</li>
+              <li lang="en">English and German, right-click to mark as found, a “Visible in screenshots” switch and start with Windows.</li>
+              <li lang="de">Deutsch und Englisch, Rechtsklick zum Abhaken, Schalter „In Screenshots sichtbar“ und Start mit Windows.</li>
+              <li lang="en">Teleporters and statues are off by default, since the game already shows them.</li>
+              <li lang="de">Teleporter und Statuen sind anfangs aus, weil das Spiel sie schon selbst zeigt.</li>
+            </ul>
+          </article>
+          <article class="release">
+            <header><b>Beta</b></header>
+            <ul>
+              <li lang="en">First public beta with markers on the in-game map, the marker panel, hotkeys and the installer.</li>
+              <li lang="de">Erste öffentliche Beta mit Markern auf der Ingame-Karte, Marker-Panel, Tasten und Setup.</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="faq">
+      <div class="wrap cols">
+        <div class="side">
+          <h2>FAQ</h2>
+          <p lang="en">Something else? Ask on <a data-link="discord" href="#" target="_blank" rel="noopener">Discord</a>.</p>
+          <p lang="de">Noch was offen? Frag auf <a data-link="discord" href="#" target="_blank" rel="noopener">Discord</a>.</p>
+        </div>
+        <div class="faq rows">
+          <details>
+            <summary><span lang="en">Can I get banned for this?</span><span lang="de">Kann ich dafür gebannt werden?</span></summary>
+            <div>
+              <p lang="en">The overlay is a separate, see-through window. It doesn’t read or change the game, injects nothing and sends no input. It only looks at the screen, the same way OBS or Discord screen sharing does. HoYoverse doesn’t officially approve overlays, so nobody can promise zero risk, but this is the safest way to build one.</p>
+              <p lang="de">Das Overlay ist ein eigenes, durchsichtiges Fenster. Es liest und ändert nichts am Spiel, schleust nichts ein und schickt keine Eingaben. Es schaut nur auf den Bildschirm, wie OBS oder Discord beim Bildschirm-Teilen. HoYoverse gibt für Overlays keine offizielle Freigabe, deshalb kann niemand null Risiko versprechen, aber so ist es am sichersten gebaut.</p>
+            </div>
+          </details>
+          <details>
+            <summary><span lang="en">Is it really free?</span><span lang="de">Ist es wirklich kostenlos?</span></summary>
+            <div>
+              <p lang="en">Yes. The download on GitHub is free and has every feature. On Ko-fi you get the same app and pay what you want, which goes toward the servers and a code-signing certificate.</p>
+              <p lang="de">Ja. Der Download auf GitHub ist kostenlos und hat alle Funktionen. Auf Ko-fi bekommst du dieselbe App und zahlst, was du möchtest. Das Geld geht in die Server und ein Code-Signing-Zertifikat.</p>
+            </div>
+          </details>
+          <details>
+            <summary><span lang="en">Windows says “Windows protected your PC”</span><span lang="de">Windows sagt „Der Computer wurde durch Windows geschützt“</span></summary>
+            <div>
+              <p lang="en">The app isn’t code-signed yet, so Windows shows this warning. Click “More info”, then “Run anyway”. A signing certificate is the first thing Ko-fi support goes to.</p>
+              <p lang="de">Die App ist noch nicht digital signiert, deshalb zeigt Windows diese Warnung. Auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Ein Signatur-Zertifikat ist das Erste, wofür die Ko-fi-Unterstützung verwendet wird.</p>
+            </div>
+          </details>
+          <details>
+            <summary><span lang="en">I don’t see any markers</span><span lang="de">Ich sehe keine Marker</span></summary>
+            <div>
+              <p lang="en">Genshin’s exclusive fullscreen hides every other window. Start the game with “Start Genshin borderless” from the tray menu, or pick window mode in the graphics settings. With several monitors, choose the right screen in the tray menu.</p>
+              <p lang="de">Genshins exklusiver Vollbildmodus verdeckt alle anderen Fenster. Starte das Spiel über „Genshin randlos starten“ im Tray-Menü oder wähle in den Grafikeinstellungen den Fenstermodus. Bei mehreren Monitoren im Tray-Menü den richtigen Bildschirm wählen.</p>
+            </div>
+          </details>
+          <details>
+            <summary><span lang="en">What do I need?</span><span lang="de">Was brauche ich?</span></summary>
+            <div>
+              <p lang="en">Windows 10 (version 2004 or newer) or Windows 11 and the PC version of Genshin Impact. Tested at 1920 × 1080 with 100 % display scaling.</p>
+              <p lang="de">Windows 10 (ab Version 2004) oder Windows 11 und die PC-Version von Genshin Impact. Getestet mit 1920 × 1080 und 100 % Anzeigeskalierung.</p>
+            </div>
+          </details>
+          <details>
+            <summary><span lang="en">Where do the markers and photos come from?</span><span lang="de">Woher kommen Marker und Fotos?</span></summary>
+            <div>
+              <p lang="en">From the community of genshin-impact-map.appsample.com, used with their permission.</p>
+              <p lang="de">Von der Community von genshin-impact-map.appsample.com, mit deren Genehmigung.</p>
+            </div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final">
+      <div class="wrap">
+        <div>
+          <h2><span lang="en">Get the overlay</span><span lang="de">Hol dir das Overlay</span></h2>
+          <p lang="en">Questions, ideas or a marker in the wrong place? Come say hi on Discord.</p>
+          <p lang="de">Fragen, Ideen oder ein Marker an der falschen Stelle? Komm auf den Discord.</p>
+        </div>
+        <div class="cta">
+          <a class="btn btn-primary" data-link="github" href="#" target="_blank" rel="noopener">
+            <svg aria-hidden="true"><use href="#i-github"/></svg>
+            <span lang="en">Download free</span><span lang="de">Kostenlos laden</span>
+          </a>
+          <a class="btn btn-gold" data-link="kofi" href="#" target="_blank" rel="noopener">
+            <svg aria-hidden="true"><use href="#i-cup"/></svg>
+            <span lang="en">Get it on Ko-fi</span><span lang="de">Auf Ko-fi holen</span>
+          </a>
+          <a class="btn btn-ghost" data-link="discord" href="#" target="_blank" rel="noopener">
+            <svg aria-hidden="true"><use href="#i-discord"/></svg>
+            <span lang="en">Join the Discord</span><span lang="de">Discord beitreten</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div>
+        <a class="brand" href="#top"><img src="/icon.png" alt="" width="26" height="26">Genshin Map Overlay</a>
+        <p lang="en">Fan project, not affiliated with or endorsed by HoYoverse. Genshin Impact and all related names are trademarks of HoYoverse. Marker data and photos: community of genshin-impact-map.appsample.com, used with permission.</p>
+        <p lang="de">Fanprojekt, nicht mit HoYoverse verbunden und nicht von HoYoverse unterstützt. Genshin Impact und alle zugehörigen Namen sind Marken von HoYoverse. Markerdaten und Fotos: Community von genshin-impact-map.appsample.com, mit Genehmigung.</p>
+      </div>
+      <nav class="foot-links" aria-label="Links">
+        <a data-link="github" href="#" target="_blank" rel="noopener">GitHub</a>
+        <a data-link="kofi" href="#" target="_blank" rel="noopener">Ko-fi</a>
+        <a data-link="discord" href="#" target="_blank" rel="noopener">Discord</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    // GitHub-Link → Releases (neueste Version).
+    const LINKS = {
+      github: 'https://github.com/FlavioForci/GenshinMapOverlay/releases/latest',
+      kofi: 'https://ko-fi.com/s/819525a108',
+      discord: 'https://discord.gg/TaKd4BU8f',
+    };
+    for (const a of document.querySelectorAll('[data-link]')) a.href = LINKS[a.dataset.link];
+
+    const TITLES = {
+      en: 'Genshin Map Overlay: every map marker on your in-game map',
+      de: 'Genshin Map Overlay: alle Marker auf deiner Ingame-Karte',
+    };
+    function setLang(lang) {
+      document.documentElement.lang = lang;
+      document.title = TITLES[lang];
+      for (const b of document.querySelectorAll('.lang button')) b.setAttribute('aria-pressed', String(b.dataset.lang === lang));
+    }
+    for (const b of document.querySelectorAll('.lang button')) {
+      b.addEventListener('click', () => {
+        setLang(b.dataset.lang);
+        try { localStorage.setItem('lang', b.dataset.lang); } catch (e) {}
+      });
+    }
+    setLang(document.documentElement.lang);
+
+    // Wer weniger Bewegung möchte, bekommt das Vorschau-Video angehalten.
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (const v of document.querySelectorAll('video[autoplay]')) { v.removeAttribute('autoplay'); v.pause(); }
+    }
+
+    // Paimons Satz erscheint Buchstabe für Buchstabe wie ein Dialog im Spiel, danach das "weiter"-Dreieck.
+    (function typeLine() {
+      const dialog = document.querySelector('.dialog');
+      const line = dialog && dialog.querySelector(`h1 [lang="${document.documentElement.lang}"]`);
+      if (!line) return;
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) { dialog.classList.add('typed'); return; }
+      const text = line.textContent;
+      const chars = [...text].map((c) => {
+        const s = document.createElement('span');
+        s.className = 'ch';
+        s.textContent = c;
+        return s;
+      });
+      line.replaceChildren(...chars);
+      chars.forEach((s, i) => setTimeout(() => s.classList.add('on'), 400 + i * 30));
+      setTimeout(() => {
+        line.textContent = text;
+        dialog.classList.add('typed');
+      }, 400 + chars.length * 30 + 150);
+    })();
+  </script>
+</body>
+</html>
