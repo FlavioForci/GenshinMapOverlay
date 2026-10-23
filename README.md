@@ -138,4 +138,4 @@ npm run dist
 
 Fan project, not affiliated with or endorsed by HoYoverse. Genshin Impact and all related names and
 images are trademarks of HoYoverse. Marker data and photos come from the community of
-[genshin-impact-map.appsample.com](https://genshin-impact-map.appsample.com), used with permission.
+[genshin-impact-map.appsample.com](https://genshin-impact-map.appsample.com), .
