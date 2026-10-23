@@ -15,7 +15,8 @@
     "server:dev": "wrangler pages dev public --cwd server --port 8788",
     "server:deploy": "wrangler pages deploy public --cwd server",
     "data:import-icons": "node server/tools/import-icons.js",
-    "data:import-photos": "node server/tools/import-photos.js"
+    "data:import-photos": "node server/tools/import-photos.js",
+    "dist:mac": "electron-builder --mac --arm64 --publish never"
   },
   "build": {
     "appId": "local.genshin-map-overlay",
@@ -46,6 +47,23 @@
       "language": "1033",
       "include": "build/installer.nsh",
       "artifactName": "GenshinMapOverlay-Setup-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon-mac.png",
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSScreenCaptureUsageDescription": "Genshin Map Overlay looks at the screen to find the in-game map and place the markers. Nothing is saved or sent."
+      }
     }
   },
   "devDependencies": {

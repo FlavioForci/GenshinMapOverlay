@@ -30,6 +30,25 @@ Tipp: Tray-Menü → **Mit Windows starten**, dann ist das Overlay immer bereit.
 - Genshin Impact für PC, randlos oder im Fenster (nicht exklusives Vollbild, siehe unten)
 - Getestet mit 1920×1080 und 4K
 
+### macOS (Apple Silicon, Beta)
+
+Es gibt eine Mac-Version für Apple Silicon (M1 und neuer). Sie ist noch nicht so ausgiebig getestet
+wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://discord.gg/TaKd4BU8f).
+
+1. `GenshinMapOverlay-<Version>-mac-arm64.zip` unter
+   [Releases](https://github.com/FlavioForci/GenshinMapOverlay/releases/latest) laden, entpacken und
+   **Genshin Map Overlay.app** in den Programme-Ordner ziehen.
+2. Die App ist nicht mit einem Apple-Entwicklerzertifikat signiert, deshalb blockiert macOS den ersten
+   Start. **Systemeinstellungen → Datenschutz & Sicherheit** öffnen, nach unten scrollen und
+   **Trotzdem öffnen** klicken. Alternativ im Terminal:
+   `xattr -dr com.apple.quarantine "/Applications/Genshin Map Overlay.app"`
+3. Bildschirmaufnahme erlauben: **Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme**,
+   **Genshin Map Overlay** einschalten, dann das Overlay beenden und neu starten.
+4. Das Overlay sitzt in der Menüleiste (Kompass-Symbol), es gibt kein Dock-Symbol. Auf Mac-Tastaturen
+   brauchen die F-Tasten eventuell **fn**.
+
+„Genshin randlos starten“ und der Tasten-Helfer gibt es nur unter Windows, auf dem Mac braucht man sie nicht.
+
 ## Bedienung
 
 | Taste | Funktion |

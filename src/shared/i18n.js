@@ -29,6 +29,7 @@
       'notice.helperDeclined': 'Ohne Admin-Freigabe gehen die Tasten im Spiel nicht – das Panel öffnest du auch über den Knopf rechts auf der Karte.',
       'notice.helperActive': 'Tasten im Spiel aktiv',
       'notice.helperActivePartial': 'Tasten im Spiel aktiv – nicht verfügbar: {keys}',
+      'notice.macScreenPermission': 'macOS: Bildschirmaufnahme für „Genshin Map Overlay“ erlauben (Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme), dann das Overlay neu starten.',
       'notice.adminCapture': 'Das Overlay läuft als Administrator – so startet Windows keine Bildschirmaufnahme. Bitte normal starten.',
       'notice.hotkeysTaken': 'Belegt oder ungültig: {keys} – in den Einstellungen ändern',
 
@@ -129,6 +130,7 @@
       'notice.helperDeclined': 'Without admin approval the hotkeys don’t work in game – you can also open the panel with the button on the right edge of the map.',
       'notice.helperActive': 'Hotkeys active in game',
       'notice.helperActivePartial': 'Hotkeys active in game – unavailable: {keys}',
+      'notice.macScreenPermission': 'macOS: allow Screen Recording for “Genshin Map Overlay” (System Settings → Privacy & Security → Screen Recording), then restart the overlay.',
       'notice.adminCapture': 'The overlay is running as administrator – Windows won’t start screen capture that way. Please start it normally.',
       'notice.hotkeysTaken': 'Taken or invalid: {keys} – change them in the settings',
 

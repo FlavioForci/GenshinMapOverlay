@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const {
-  app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, Tray, nativeImage, screen, session, shell,
+  app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, Tray, nativeImage, screen, session, shell, systemPreferences,
 } = require('electron');
 const config = require('./config');
 const I18n = require('./shared/i18n');
@@ -14,6 +14,9 @@ const TILESET = require('./data/tileset');
 const hotkeyHelper = require('./hotkey-helper');
 
 const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
+// Windows: Admin-/UIPI-Themen, Tasten-Helfer, Genshin-Start. macOS: Panel über Vollbild, Aufnahme-Freigabe
+const IS_WIN = process.platform === 'win32';
+const IS_MAC = process.platform === 'darwin';
 
 let cfg;
 let lang = 'en';
@@ -108,6 +111,7 @@ function resolveLanguage() {
 
 async function start() {
   Menu.setApplicationMenu(null);
+  if (IS_MAC) app.dock.hide();
   cfg = config.load();
   lang = resolveLanguage();
   if (cfg.tileset) Object.assign(TILESET, cfg.tileset);
@@ -121,6 +125,7 @@ async function start() {
   createTracker();
   createTray();
   registerHotkeys();
+  checkScreenPermission();
 
   for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(event, () => {
@@ -135,7 +140,7 @@ async function start() {
   if (state.isAdmin) notify(tr('notice.adminCapture'));
 
   loadMarkerData(false);
-  if (!cfg.active) {
+  if (!cfg.active && IS_WIN) {
     tray.displayBalloon({
       title: tr('balloon.runningTitle'),
       content: tr('balloon.runningText', { key: cfg.hotkeys.toggleOverlay }),
@@ -145,7 +150,15 @@ async function start() {
 }
 
 function isAdmin() {
-  return spawnSync('net', ['session'], { windowsHide: true, stdio: 'ignore' }).status === 0;
+  return IS_WIN && spawnSync('net', ['session'], { windowsHide: true, stdio: 'ignore' }).status === 0;
+}
+
+// macOS fragt beim ersten Aufnehmen nach, wirksam erst nach Neustart der App
+function checkScreenPermission() {
+  if (!IS_MAC) return;
+  const status = systemPreferences.getMediaAccessStatus('screen');
+  log(`macOS Bildschirmaufnahme: ${status}`);
+  if (status !== 'granted') notify(tr('notice.macScreenPermission'));
 }
 
 async function loadMarkerData(force) {
@@ -178,6 +191,8 @@ function createOverlay() {
     maximizable: false,
     fullscreenable: false,
     focusable: false,
+    // macOS: NSPanel, kann über Vollbild-Apps liegen
+    ...(IS_MAC ? { type: 'panel' } : {}),
     skipTaskbar: true,
     alwaysOnTop: true,
     title: 'Genshin Map Overlay',
@@ -192,6 +207,7 @@ function createOverlay() {
     },
   });
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  if (IS_MAC) overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
   // Aus Aufnahmen ausblenden, sonst sieht der Tracker die eigenen Marker
   overlayWin.setContentProtection(!cfg.showInCaptures);
@@ -413,7 +429,7 @@ function isGenshinRunning() {
 // Auto-Start nur bei laufendem Genshin. UAC abgelehnt → erst wieder per Tray-Menü
 let helperDeclined = false;
 async function maybeStartHelper(force) {
-  if (state.isAdmin || bridge.connected || !cfg.hotkeysEnabled) return;
+  if (!IS_WIN || state.isAdmin || bridge.connected || !cfg.hotkeysEnabled) return;
   if (!force && (helperDeclined || !isGenshinRunning())) return;
   const ok = await bridge.start();
   if (!ok) {
@@ -524,7 +540,8 @@ function registerHotkeys() {
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16, quality: 'best' }));
   tray.setToolTip('Genshin Map Overlay');
-  tray.on('click', () => setActive(!cfg.active));
+  // macOS öffnet beim Klick das Menü, dort nicht zusätzlich umschalten
+  if (IS_WIN) tray.on('click', () => setActive(!cfg.active));
   updateTrayMenu();
 }
 
@@ -541,13 +558,13 @@ function updateTrayMenu() {
   const primaryId = screen.getPrimaryDisplay().id;
   const currentId = targetDisplay().id;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: tr('tray.launchGenshin'), click: launchGenshinBorderless },
-    { type: 'separator' },
+    { label: tr('tray.launchGenshin'), visible: IS_WIN, click: launchGenshinBorderless },
+    { type: 'separator', visible: IS_WIN },
     { label: tr('tray.active'), type: 'checkbox', checked: cfg.active, click: (item) => setActive(item.checked), ...hotkeyLabel('toggleOverlay') },
     { label: tr('tray.panel'), click: togglePanel, ...hotkeyLabel('togglePanel') },
     {
       label: tr('tray.helperStart'),
-      visible: !state.helperConnected && !state.isAdmin && cfg.hotkeysEnabled,
+      visible: IS_WIN && !state.helperConnected && !state.isAdmin && cfg.hotkeysEnabled,
       click: () => {
         helperDeclined = false;
         maybeStartHelper(true);

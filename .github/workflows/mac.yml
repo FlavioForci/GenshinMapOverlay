@@ -1,0 +1,47 @@
+# macOS-Build (Apple Silicon) auf einem GitHub-Mac, hängt die ZIP ans Release.
+# Start: Actions → macOS build → Run workflow (oder: gh workflow run mac.yml -f tag=v1.1.0)
+name: macOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release, an das die Mac-Version angehängt wird
+        required: true
+        default: v1.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: App bauen
+        run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # Ohne Apple-Entwicklerkonto: Ad-hoc-Signatur, sonst startet die App auf Apple Silicon nicht
+      - name: Signieren und packen
+        run: |
+          APP="dist/mac-arm64/Genshin Map Overlay.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          VERSION=$(node -p "require('./package.json').version")
+          ditto -c -k --keepParent "$APP" "GenshinMapOverlay-$VERSION-mac-arm64.zip"
+          ls -la GenshinMapOverlay-*-mac-arm64.zip
+
+      - name: Ans Release hängen
+        run: gh release upload "${{ inputs.tag }}" GenshinMapOverlay-*-mac-arm64.zip --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
