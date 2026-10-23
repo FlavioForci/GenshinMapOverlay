@@ -102,4 +102,4 @@ in `%APPDATA%\Genshin Map Overlay` und können danach gelöscht werden.
 
 Fanprojekt, nicht mit HoYoverse verbunden und nicht von HoYoverse unterstützt. Genshin Impact und alle
 zugehörigen Namen und Bilder sind Marken von HoYoverse. Markerdaten und Fotos stammen von der Community
-von [genshin-impact-map.appsample.com](https://genshin-impact-map.appsample.com), mit Genehmigung.
+von [genshin-impact-map.appsample.com](https://genshin-impact-map.appsample.com), .
