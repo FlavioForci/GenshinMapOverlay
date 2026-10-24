@@ -48,9 +48,12 @@ jobs:
           APP="$PWD/dist/linux-unpacked/genshin-map-overlay"
           Xvfb :99 -screen 0 1920x1080x24 &
           export DISPLAY=:99
+          # Runner-Image setzt XDG_CONFIG_HOME, sonst landet userData nicht unter $HOME/.config
+          echo "XDG_CONFIG_HOME vom Runner: ${XDG_CONFIG_HOME:-<leer>}"
           # $1 = Name, Rest = Umgebung
           run() {
             export HOME="$RUNNER_TEMP/$1"
+            export XDG_CONFIG_HOME="$HOME/.config"
             mkdir -p "$HOME"
             env "${@:2}" "$APP" --no-sandbox > "$HOME/app.out" 2>&1 &
             sleep 20
@@ -59,8 +62,9 @@ jobs:
             pkill -f "$APP" || true
             sleep 2
             LOG="$HOME/.config/Genshin Map Overlay/overlay.log"
-            echo "::group::$1"; cat "$HOME/app.out" "$LOG"; echo "::endgroup::"
+            echo "::group::$1"; cat "$HOME/app.out" "$LOG" || true; echo "::endgroup::"
             [ "$ALIVE" = 1 ] || { echo "$1: App lief nach 20 s nicht mehr"; exit 1; }
+            [ -f "$LOG" ] || { echo "$1: kein Log, gefunden:"; find "$RUNNER_TEMP" /home/runner -name overlay.log 2>/dev/null; exit 1; }
             grep -q "start: Version" "$LOG"
           }
           run x11 XDG_SESSION_TYPE=x11
