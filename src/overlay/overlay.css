@@ -272,6 +272,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .setting { cursor: pointer; }
+.setting[hidden] { display: none; }
 .setting:hover { background: var(--cream-hover); box-shadow: 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.5); }
 .setting-name { flex: 1; min-width: 0; }
 

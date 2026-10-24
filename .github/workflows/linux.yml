@@ -1,0 +1,89 @@
+# Linux-Build (x64): AppImage + deb auf einem GitHub-Ubuntu, AppImage lässt sich unter Windows nicht bauen.
+# - Pull-Request: nur bauen, Dateien als Workflow-Artefakt
+# - Start per Hand mit Tag: zusätzlich ans Release hängen (gh workflow run linux.yml -f tag=v1.1.0)
+name: Linux build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release, an das die Linux-Version angehängt wird (leer = nur bauen)
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/linux.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: App bauen
+        run: npm run dist:linux
+
+      # Gepackte App je 20 s ohne Bildschirm (Xvfb) laufen lassen: fängt Abstürze beim Start ab.
+      # - x11: normaler Start
+      # - wayland: Sitzung nur vorgetäuscht, App muss sich mit --ozone-platform=x11 neu starten
+      # Kein Test mit Genshin, Tray oder echter Bildschirmaufnahme
+      - name: Starttest
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          APP="$PWD/dist/linux-unpacked/genshin-map-overlay"
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99
+          # Runner-Image setzt XDG_CONFIG_HOME, sonst landet userData nicht unter $HOME/.config
+          echo "XDG_CONFIG_HOME vom Runner: ${XDG_CONFIG_HOME:-<leer>}"
+          # $1 = Name, Rest = Umgebung
+          run() {
+            export HOME="$RUNNER_TEMP/$1"
+            export XDG_CONFIG_HOME="$HOME/.config"
+            mkdir -p "$HOME"
+            env "${@:2}" "$APP" --no-sandbox > "$HOME/app.out" 2>&1 &
+            sleep 20
+            ALIVE=0
+            pgrep -f "$APP" > /dev/null && ALIVE=1
+            pkill -f "$APP" || true
+            sleep 2
+            LOG="$HOME/.config/Genshin Map Overlay/overlay.log"
+            echo "::group::$1"; cat "$HOME/app.out" "$LOG" || true; echo "::endgroup::"
+            [ "$ALIVE" = 1 ] || { echo "$1: App lief nach 20 s nicht mehr"; exit 1; }
+            [ -f "$LOG" ] || { echo "$1: kein Log, gefunden:"; find "$RUNNER_TEMP" /home/runner -name overlay.log 2>/dev/null; exit 1; }
+            grep -q "start: Version" "$LOG"
+          }
+          run x11 XDG_SESSION_TYPE=x11
+          run wayland XDG_SESSION_TYPE=wayland WAYLAND_DISPLAY=wayland-test
+          grep -q "natives Wayland false" "$RUNNER_TEMP/wayland/.config/Genshin Map Overlay/overlay.log"
+
+      - name: Dateien zeigen
+        run: ls -la dist/*.AppImage dist/*.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
+
+      - name: Ans Release hängen
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        run: gh release upload "${{ inputs.tag }}" dist/*.AppImage dist/*.deb --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

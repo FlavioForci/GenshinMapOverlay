@@ -15,8 +15,12 @@ const hotkeyHelper = require('./hotkey-helper');
 
 const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
 // Windows: Admin-/UIPI-Themen, Tasten-Helfer, Genshin-Start. macOS: Panel über Vollbild, Aufnahme-Freigabe
+// Linux: X11/XWayland statt Wayland, Autostart per .desktop-Datei, kein Aufnahmeschutz
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
+const IS_LINUX = process.platform === 'linux';
+// Wie WebRTC: Wayland-Sitzung → Aufnahme übers PipeWire-Portal, auch unter XWayland
+const IS_WAYLAND = IS_LINUX && process.env.XDG_SESSION_TYPE === 'wayland' && !!process.env.WAYLAND_DISPLAY;
 
 let cfg;
 let lang = 'en';
@@ -80,8 +84,27 @@ function log(text) {
 
 // ---------- Start ----------
 
+// Linux unter Wayland: einmal mit --ozone-platform=x11 neu starten (XWayland).
+// - nur dort gehen Fensterposition, „immer oben“, Durchklicken, Cursorabfrage und Hotkeys
+// - Schalter wirkt nur beim Prozessstart, app.commandLine kommt zu spät
+// - eigener --ozone-platform beim Start (z. B. =wayland) hat Vorrang
+function relaunchOnX11() {
+  if (!IS_WAYLAND || !process.env.DISPLAY || process.argv.some((a) => a.startsWith('--ozone-platform'))) return false;
+  // AppImage: die Datei selbst neu starten, der Mount-Ordner verschwindet mit diesem Prozess
+  const exe = process.env.APPIMAGE || process.execPath;
+  try {
+    spawn(exe, [...process.argv.slice(1), '--ozone-platform=x11'], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  } catch {
+    // Neustart nicht möglich → so weiter wie gestartet
+    return false;
+  }
+}
+
 if (hotkeyHelper.isHelperProcess()) {
   hotkeyHelper.runHelper();
+} else if (relaunchOnX11()) {
+  app.exit(0);
 } else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -126,6 +149,9 @@ async function start() {
   createTray();
   registerHotkeys();
   checkScreenPermission();
+  checkLinuxSession();
+  // AppImage: nach Update/Verschieben den Autostart auf die aktuelle Datei zeigen lassen
+  if (IS_LINUX && app.isPackaged && isAutostart()) setAutostart(true);
 
   for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(event, () => {
@@ -161,6 +187,15 @@ function checkScreenPermission() {
   if (status !== 'granted') notify(tr('notice.macScreenPermission'));
 }
 
+// Linux: reines Wayland → Overlay eingeschränkt. Wayland-Sitzung → Portal fragt nach dem Bildschirm
+function checkLinuxSession() {
+  if (!IS_LINUX) return;
+  const nativeWayland = IS_WAYLAND && !process.argv.includes('--ozone-platform=x11');
+  log(`Linux: Sitzung ${process.env.XDG_SESSION_TYPE || '?'}, Desktop ${process.env.XDG_CURRENT_DESKTOP || '?'}, natives Wayland ${nativeWayland}`);
+  if (nativeWayland) notify(tr('notice.linuxWayland'));
+  else if (IS_WAYLAND && cfg.active) notify(tr('notice.linuxPortal'));
+}
+
 async function loadMarkerData(force) {
   try {
     markerData = await store.loadMarkers({ force, lang });
@@ -190,6 +225,7 @@ function createOverlay() {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
+    // Linux (X11): nicht fokussierbar = override-redirect, liegt am Fenstermanager vorbei oben
     focusable: false,
     // macOS: NSPanel, kann über Vollbild-Apps liegen
     ...(IS_MAC ? { type: 'panel' } : {}),
@@ -209,7 +245,7 @@ function createOverlay() {
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   if (IS_MAC) overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
-  // Aus Aufnahmen ausblenden, sonst sieht der Tracker die eigenen Marker
+  // Aus Aufnahmen ausblenden, sonst sieht der Tracker die eigenen Marker (Linux: nicht möglich)
   overlayWin.setContentProtection(!cfg.showInCaptures);
   overlayWin.loadFile(path.join(__dirname, 'overlay', 'index.html'));
   overlayWin.webContents.on('did-finish-load', () => {
@@ -279,6 +315,9 @@ function createTracker() {
   });
 }
 
+// Wayland: Portal-Auswahl merken, sonst fragt der Systemdialog bei jedem Neustart der Aufnahme
+let portalSource = null;
+
 // Nur der Tracker darf aufnehmen, ohne Dialog den Bildschirm des Overlays
 function setupCapture() {
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
@@ -289,11 +328,17 @@ function setupCapture() {
       callback({});
       return;
     }
+    if (portalSource) {
+      callback({ video: portalSource });
+      return;
+    }
     try {
+      // Wayland: zeigt den Portal-Dialog, liefert nur die gewählte Quelle ohne display_id
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
       const wanted = String(targetDisplay().id);
       const source = sources.find((s) => s.display_id === wanted) || sources[0];
       log(`capture: ${sources.length} Bildschirme, gewählt ${source ? `${source.id} (display ${source.display_id})` : 'keiner'}, gesucht display ${wanted}`);
+      if (IS_WAYLAND && source) portalSource = source;
       callback(source ? { video: source } : {});
     } catch (err) {
       log(`capture: getSources fehlgeschlagen – ${err && err.stack ? err.stack : err}`);
@@ -316,6 +361,8 @@ function publicSettings() {
     enabledTypes: cfg.enabledTypes,
     hideFound: cfg.hideFound,
     showInCaptures: cfg.showInCaptures,
+    // Linux kennt keinen Aufnahmeschutz → Schalter im Panel ausblenden
+    captureProtection: !IS_LINUX,
     opacity: cfg.opacity,
     markerSize: cfg.markerSize,
     active: cfg.active,
@@ -358,6 +405,8 @@ function localizedStatus() {
 
 function setTrackerStatus(status) {
   const changed = status.phase !== state.tracker.phase;
+  // Gemerkte Portal-Quelle ungültig → beim nächsten Versuch neu fragen
+  if (status.phase === 'capture-error') portalSource = null;
   state.tracker = status;
   const localized = localizedStatus();
   if (changed) log(`tracker-status: ${status.phase} – ${localized.message}`);
@@ -411,6 +460,7 @@ function setLanguage(code) {
 }
 
 function setDisplay(id) {
+  portalSource = null;
   updateSettings({ displayId: id });
   placeOverlay();
   sendToTracker('tracker:settings', trackerSettings());
@@ -538,11 +588,42 @@ function registerHotkeys() {
 // ---------- Tray ----------
 
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16, quality: 'best' }));
+  // Linux-Leisten skalieren selbst, größer bleibt dort scharf
+  const size = IS_LINUX ? 32 : 16;
+  tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: size, height: size, quality: 'best' }));
   tray.setToolTip('Genshin Map Overlay');
-  // macOS öffnet beim Klick das Menü, dort nicht zusätzlich umschalten
+  // macOS und Linux öffnen beim Klick meist das Menü, dort nicht zusätzlich umschalten
   if (IS_WIN) tray.on('click', () => setActive(!cfg.active));
   updateTrayMenu();
+}
+
+// Linux: Electron kann keinen Autostart → XDG-Autostart-Datei
+function autostartFile() {
+  return path.join(app.getPath('appData'), 'autostart', 'genshin-map-overlay.desktop');
+}
+
+function isAutostart() {
+  return IS_LINUX ? fs.existsSync(autostartFile()) : app.getLoginItemSettings().openAtLogin;
+}
+
+function setAutostart(on) {
+  if (!IS_LINUX) {
+    app.setLoginItemSettings({ openAtLogin: on });
+    return;
+  }
+  try {
+    if (!on) {
+      fs.rmSync(autostartFile(), { force: true });
+      return;
+    }
+    // AppImage: die Datei selbst, nicht der Mount-Ordner. Exec-Regeln: " ` $ \ maskieren, % verdoppeln
+    const exe = (process.env.APPIMAGE || process.execPath).replace(/["`$\\]/g, '\\$&').replace(/%/g, '%%');
+    const entry = ['[Desktop Entry]', 'Type=Application', 'Name=Genshin Map Overlay', `Exec="${exe}"`, 'Terminal=false', 'X-GNOME-Autostart-enabled=true', ''];
+    fs.mkdirSync(path.dirname(autostartFile()), { recursive: true });
+    fs.writeFileSync(autostartFile(), entry.join('\n'), 'utf8');
+  } catch (err) {
+    log(`autostart: ${err.message}`);
+  }
 }
 
 // Taste rechtsbündig anzeigen; registriert wird sie woanders (globalShortcut/Helfer)
@@ -573,12 +654,12 @@ function updateTrayMenu() {
     { type: 'separator' },
     {
       // Nur installiert, sonst startet Windows die nackte electron.exe
-      label: tr('tray.autostart'),
+      label: tr(IS_LINUX ? 'tray.autostartLogin' : 'tray.autostart'),
       type: 'checkbox',
       visible: app.isPackaged,
-      checked: app.isPackaged && app.getLoginItemSettings().openAtLogin,
+      checked: app.isPackaged && isAutostart(),
       click: (item) => {
-        app.setLoginItemSettings({ openAtLogin: item.checked });
+        setAutostart(item.checked);
         log(`autostart: ${item.checked}`);
         updateTrayMenu();
       },
