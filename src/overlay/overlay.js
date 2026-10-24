@@ -150,15 +150,19 @@ class OneEuro {
 
 const viewFilter = { zoom: new OneEuro(), cx: new OneEuro(), cy: new OneEuro() };
 
+// y-Maßstab getrennt halten (k = y/x):
+// - Aufnahme nicht exakt im Bildschirmverhältnis, z. B. 1366×768 → 1280×720 (gerundet), k ≈ 1,0005
+// - Kartenpixel um 1e6 → schon 0,05 % ergeben sonst Hunderte Pixel Versatz
 function smoothView(next, t) {
   const W = innerWidth;
   const H = innerHeight;
   const s = next.sx * W;
+  const k = (next.sy * H) / s;
   const ls = viewFilter.zoom.filter(Math.log(s), t, H / 2);
   const fs = Math.exp(ls);
   const cx = viewFilter.cx.filter((W / 2 - next.ox * W) / s, t, fs);
-  const cy = viewFilter.cy.filter((H / 2 - next.oy * H) / s, t, fs);
-  return { ...next, sx: fs / W, sy: fs / H, ox: (W / 2 - fs * cx) / W, oy: (H / 2 - fs * cy) / H };
+  const cy = viewFilter.cy.filter((H / 2 - next.oy * H) / (s * k), t, fs);
+  return { ...next, sx: fs / W, sy: (fs * k) / H, ox: (W / 2 - fs * cx) / W, oy: (H / 2 - fs * k * cy) / H };
 }
 
 // Restschwankung unter STICK_PX (bei 1080p): Marker bleiben exakt stehen
