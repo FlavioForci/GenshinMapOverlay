@@ -1,0 +1,10 @@
+{
+  "provider": "hoyolab",
+  "map": "hoyolab:ys_obc:2",
+  "generation": "bundle_cecaae550a4003092d80:1_6be3a4156dff00602a2f",
+  "checkedAt": "2026-10-24",
+  "catalogEvidence": "public-response",
+  "progressEvidence": "unobserved",
+  "liveAcceptance": false,
+  "notes": "Public point_group and z_level are retained as raw metadata; floor semantics are unverified. No marked-list response was observed."
+}

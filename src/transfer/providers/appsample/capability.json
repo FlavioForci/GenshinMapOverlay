@@ -1,0 +1,49 @@
+{
+  "provider": "appsample",
+  "adapterVersion": "0.1.0",
+  "status": "unavailable",
+  "variants": [
+    {
+      "id": "current-web",
+      "origins": [
+        "https://genshin-impact-map.appsample.com"
+      ],
+      "map": "appsample:gim:2",
+      "generation": "next:g2A_0C3iZKpNbinJgViG_",
+      "accountTier": "unverified",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "e0a6b038c223b3a33a51393aac12afdfe9256edaf2f1343d8afb4ce699386e4c",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://game-data.lemonapi.com",
+          "path": "/gim/markers_all.v5.compressed.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://genshin-impact-map.appsample.com",
+          "path": "/api/markerNames.json"
+        }
+      ],
+      "statePaths": [],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "first-party-progress-interface-unavailable"
+    }
+  ],
+  "reasonCode": "first-party-progress-interface-unavailable"
+}

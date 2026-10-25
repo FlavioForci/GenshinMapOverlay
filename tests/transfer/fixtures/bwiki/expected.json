@@ -1,0 +1,10 @@
+{
+  "supported": false,
+  "progressObserved": false,
+  "catalogSampleCount": 3,
+  "syntheticFoundIds": [
+    "synthetic-point-a",
+    "synthetic-point-b"
+  ],
+  "reasonCode": "catalog-incomplete-and-acceptance-pending"
+}

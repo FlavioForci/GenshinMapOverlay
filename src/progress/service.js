@@ -292,7 +292,7 @@ class ProgressService {
     catch { ctx = null; }
     return this._submit(ctx, 'generation', () => copyPatch(options, ['sessionGeneration', 'profileIds']), async (_, data) => {
       const actual = await this.repository.load(LOCAL);
-      const bytes = backups.exportBackup(actual.state, data.profileIds);
+      const bytes = backups.exportBackup(actual.state, data.profileIds, { transferByProfile: actual.extensions?.transfer.profiles || {} });
       this._adopt(actual);
       return bytes;
     });

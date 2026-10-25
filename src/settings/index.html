@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Genshin Map Overlay</title>
+  <link rel="stylesheet" href="../overlay/overlay.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main>
+    <header><img src="../../assets/icon.png" width="32" height="32" alt=""><h1 data-i18n="profiles.title"></h1></header>
+    <p data-i18n="profiles.intro"></p>
+    <p><span data-i18n="profiles.active"></span> <strong id="active-profile"></strong></p>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section>
+      <label for="profiles" data-i18n="profiles.list"></label>
+      <div class="row"><select id="profiles"></select><button id="select" type="button" data-i18n="profiles.select"></button></div>
+      <label for="name" data-i18n="profiles.name"></label><input id="name" type="text" autocomplete="off">
+      <label for="region" data-i18n="profiles.region"></label><input id="region" type="text" autocomplete="off">
+      <p class="hint" data-i18n="profiles.nameHelp"></p>
+      <div class="row"><button id="create" type="button" data-i18n="profiles.create"></button><button id="rename" type="button" data-i18n="profiles.rename"></button></div>
+    </section>
+    <section><h2 data-i18n="profiles.backups"></h2><p data-i18n="profiles.backupHelp"></p>
+      <div class="row"><button id="import-backup" type="button" data-i18n="profiles.import"></button><button id="export-backup" type="button" data-i18n="profiles.export"></button></div>
+    </section>
+    <section><p id="recovery-help" hidden data-i18n="profiles.recoveryHelp"></p>
+      <div class="row"><button id="retry-local" type="button" hidden data-i18n="profiles.retry"></button><button id="restore-local" type="button" hidden data-i18n="profiles.restore"></button></div>
+    </section>
+  </main>
+  <script src="../shared/i18n.js"></script><script src="settings.js"></script>
+</body>
+</html>

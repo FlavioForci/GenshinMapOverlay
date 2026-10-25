@@ -391,11 +391,8 @@ test('oversized proposed envelope is rejected before replacing any committed fil
   const primary = await fs.readFile(stateFile);
   const backup = await fs.readFile(lastGood);
   await assert.rejects(repo.transact(scope, draft => {
-    draft.clock = Number.MAX_SAFE_INTEGER;
-    draft.state.profiles[PROFILE_A].region.value = '🗺'.repeat(43);
-    for (let id = 1; id <= 174099; id++) {
-      draft.state.profiles[PROFILE_A].markers[id] = { value: false, clock: Number.MAX_SAFE_INTEGER, actor: ACTOR_A };
-    }
+    const records = Array.from({ length: 120000 }, (_, i) => ({ provider: 'bwiki', map: 'other', catalog: { generation: 'old', fingerprint: 'opaque' }, record: { id: String(i), map: 'other', category: '🐉'.repeat(128), level: '🐉'.repeat(128), state: true, position: null }, mapping: null }));
+    draft.extensions = { transfer: { version: 1, profiles: { [PROFILE_A]: { version: 1, records, imports: [] } } } };
   }), { code: 'limit-exceeded' });
   assert.deepEqual(await fs.readFile(stateFile), primary);
   assert.deepEqual(await fs.readFile(lastGood), backup);

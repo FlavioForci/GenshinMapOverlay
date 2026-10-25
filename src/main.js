@@ -2,18 +2,25 @@
 // Kein Zugriff aufs Spiel, keine Eingaben. Hotkeys per RegisterHotKey, kein Tastatur-Hook.
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('node:url');
 const { spawn, spawnSync } = require('child_process');
 const {
-  app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, Tray, nativeImage, screen, session, shell, systemPreferences,
+  app, BrowserWindow, desktopCapturer, globalShortcut, ipcMain, Menu, Tray, nativeImage, screen, session, shell, systemPreferences, dialog,
 } = require('electron');
 const config = require('./config');
 const I18n = require('./shared/i18n');
 const { DataStore } = require('./data/store');
-const { FoundStore } = require('./data/found');
+const { createProgressRuntime } = require('./progress/runtime');
+const { registerProgressIpc } = require('./progress/ipc');
+const { createQuitGuard, createRendererQuitDrain } = require('./progress/app-lifecycle');
+const { createClientProgressBarrier } = require('./progress/client-barrier');
+const { createSettingsWindow, createSettingsWindowOwner } = require('./settings/window');
 const TILESET = require('./data/tileset');
 const hotkeyHelper = require('./hotkey-helper');
 
 const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
+const OVERLAY_DOCUMENT = pathToFileURL(path.join(__dirname, 'overlay/index.html')).href;
+const SETTINGS_DOCUMENT = pathToFileURL(path.join(__dirname, 'settings/index.html')).href;
 // Windows: Admin-/UIPI-Themen, Tasten-Helfer, Genshin-Start. macOS: Panel über Vollbild, Aufnahme-Freigabe
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
@@ -21,7 +28,12 @@ const IS_MAC = process.platform === 'darwin';
 let cfg;
 let lang = 'en';
 let store;
-let found;
+let progressRuntime;
+let progressInitialization;
+let disposeProgressIpc;
+const settingsOwner = createSettingsWindowOwner({
+  createWindow: onClosed => createSettingsWindow({ BrowserWindow, onClosed, getLanguage: () => lang }),
+});
 let markerData = null;
 let overlayWin;
 let trackerWin;
@@ -89,11 +101,58 @@ if (hotkeyHelper.isHelperProcess()) {
   app.whenReady().then(start);
 }
 
-app.on('before-quit', () => {
-  quitting = true;
-  timers.forEach((timer) => clearInterval(timer));
-  if (found) found.saveNow();
+const overlayProgressDrain = createRendererQuitDrain({
+  ipcMain,
+  getClients: () => [{ window: overlayWin, url: OVERLAY_DOCUMENT }],
 });
+const rendererQuitDrain = createRendererQuitDrain({
+  ipcMain,
+  getClients: () => [
+    { window: overlayWin, url: OVERLAY_DOCUMENT },
+    { window: settingsOwner.current(), url: SETTINGS_DOCUMENT },
+  ],
+});
+// One FIFO owns both drain lifecycles. Profile commands prepare only overlay:
+// preparing the settings initiator here would wait on its own pending command.
+const progressBarrier = createClientProgressBarrier({
+  overlayDrain: overlayProgressDrain,
+  quitDrain: {
+    async prepare() {
+      // Startup can create overlay after initialization. Capture clients only
+      // after that continuation; shutdown has already closed barrier acceptance.
+      if (progressInitialization) await progressInitialization;
+      await rendererQuitDrain.prepare();
+    },
+    resume: () => rendererQuitDrain.resume(),
+    dispose: () => rendererQuitDrain.dispose(),
+  },
+});
+function localProgressWindow(window, url) {
+  return alive(window) && !window.webContents.isDestroyed() && window.webContents.getURL() === url;
+}
+function openProfileSettings() {
+  if (progressBarrier.active()) return;
+  return settingsOwner.open();
+}
+const quitGuard = createQuitGuard({
+  shutdown: () => progressBarrier.shutdown(async () => {
+    const runtime = progressRuntime || (progressInitialization && await progressInitialization);
+    if (runtime) await runtime.shutdown();
+  }),
+  quit: () => app.quit(),
+  onReady: () => {
+    quitting = true;
+    timers.forEach(timer => clearInterval(timer));
+    clearTimeout(saveTimer);
+    if (disposeProgressIpc) disposeProgressIpc();
+    progressBarrier.dispose();
+  },
+  onError: () => {
+    notify(tr('profiles.quitFailed'));
+    dialog.showErrorBox(tr('profiles.title'), tr('profiles.quitFailed'));
+  },
+});
+app.on('before-quit', event => { void quitGuard.beforeQuit(event); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => {});
 
@@ -112,11 +171,24 @@ function resolveLanguage() {
 async function start() {
   Menu.setApplicationMenu(null);
   if (IS_MAC) app.dock.hide();
-  cfg = config.load();
+  cfg = config.load({ preserveMalformed: true });
   lang = resolveLanguage();
   if (cfg.tileset) Object.assign(TILESET, cfg.tileset);
   store = new DataStore(path.join(app.getPath('userData'), 'cache'), TILESET, cfg.serverUrl);
-  found = new FoundStore(path.join(app.getPath('userData'), 'found.json'));
+  progressInitialization = createProgressRuntime({ app, log, onSnapshot: snapshot => {
+    sendToOverlay('progress:snapshot', snapshot);
+    const settingsWindow = settingsOwner.current();
+    if (localProgressWindow(settingsWindow, SETTINGS_DOCUMENT)) settingsWindow.webContents.send('progress:snapshot', snapshot);
+  } });
+  progressRuntime = await progressInitialization;
+  disposeProgressIpc = registerProgressIpc({
+    ipcMain, service: progressRuntime.service,
+    getOverlayWindow: () => localProgressWindow(overlayWin, OVERLAY_DOCUMENT) ? overlayWin : null,
+    getSettingsWindow: () => localProgressWindow(settingsOwner.current(), SETTINGS_DOCUMENT) ? settingsOwner.current() : null,
+    openSettings: openProfileSettings, dialogs: dialog,
+    retryLocal: () => progressRuntime.retryLocal(),
+    withProgressBarrier: operation => progressBarrier.run(operation),
+  });
   state.isAdmin = isAdmin();
   log(`start: Version ${app.getVersion()}, Electron ${process.versions.electron}, Sprache ${lang}, Admin ${state.isAdmin}, Bildschirme ${screen.getAllDisplays().map((d) => `${d.id}:${d.size.width}x${d.size.height}@${d.scaleFactor}`).join(' ')}`);
 
@@ -211,10 +283,16 @@ function createOverlay() {
   overlayWin.setIgnoreMouseEvents(true, { forward: true });
   // Aus Aufnahmen ausblenden, sonst sieht der Tracker die eigenen Marker
   overlayWin.setContentProtection(!cfg.showInCaptures);
+  const fixedNavigation = (event, url) => { if (url !== OVERLAY_DOCUMENT) event.preventDefault(); };
+  overlayWin.webContents.on('will-navigate', fixedNavigation);
+  overlayWin.webContents.on('will-redirect', fixedNavigation);
+  overlayWin.webContents.on('will-attach-webview', event => event.preventDefault());
+  overlayWin.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   overlayWin.loadFile(path.join(__dirname, 'overlay', 'index.html'));
   overlayWin.webContents.on('did-finish-load', () => {
+    if (!localProgressWindow(overlayWin, OVERLAY_DOCUMENT)) return;
     sendToOverlay('settings', publicSettings());
-    sendToOverlay('found:all', found.list());
+    sendToOverlay('progress:snapshot', progressRuntime.service.snapshot());
     sendToOverlay('tracker:status', localizedStatus());
     if (markerData) sendToOverlay('data:markers', markerData);
     for (const text of pendingNotices) sendToOverlay('notice', text);
@@ -313,8 +391,6 @@ function publicSettings() {
     language: lang,
     hotkeys: cfg.hotkeysEnabled ? cfg.hotkeys : {},
     hotkeyErrors: state.hotkeyErrors.map((name) => cfg.hotkeys[name]),
-    enabledTypes: cfg.enabledTypes,
-    hideFound: cfg.hideFound,
     showInCaptures: cfg.showInCaptures,
     opacity: cfg.opacity,
     markerSize: cfg.markerSize,
@@ -335,6 +411,7 @@ function trackerSettings() {
 }
 
 function sendToOverlay(channel, payload) {
+  if (channel === 'progress:snapshot' && !localProgressWindow(overlayWin, OVERLAY_DOCUMENT)) return;
   if (alive(overlayWin)) overlayWin.webContents.send(channel, payload);
 }
 
@@ -345,7 +422,10 @@ function sendToTracker(channel, payload) {
 function updateSettings(patch) {
   Object.assign(cfg, patch);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => config.save(cfg), 400);
+  saveTimer = setTimeout(() => {
+    // Never overwrite legacy bytes during migration or read-only recovery.
+    if (progressRuntime?.service.snapshot().sync.phase === 'local') config.save(cfg);
+  }, 400);
   sendToOverlay('settings', publicSettings());
   updateTrayMenu();
 }
@@ -390,8 +470,7 @@ function togglePanel() {
 }
 
 function toggleFoundVisibility() {
-  updateSettings({ hideFound: !cfg.hideFound });
-  notify(tr(cfg.hideFound ? 'notice.foundHidden' : 'notice.foundShown'));
+  sendToOverlay('progress:toggle-hide-found');
 }
 
 function cycleOpacity() {
@@ -405,6 +484,7 @@ function cycleOpacity() {
 function setLanguage(code) {
   lang = I18n.resolve(code);
   updateSettings({ language: lang });
+  settingsOwner.sendLanguage(lang);
   sendToOverlay('tracker:status', localizedStatus());
   loadMarkerData(false);
   notify(tr('notice.languageChanged'));
@@ -477,8 +557,9 @@ function launchGenshinBorderless() {
 
 function reloadSettings() {
   const previousLang = lang;
-  cfg = config.load();
+  cfg = config.load({ preserveMalformed: true });
   lang = resolveLanguage();
+  settingsOwner.sendLanguage(lang);
   sendToOverlay('settings', publicSettings());
   sendToTracker('tracker:settings', trackerSettings());
   registerHotkeys();
@@ -562,6 +643,7 @@ function updateTrayMenu() {
     { type: 'separator', visible: IS_WIN },
     { label: tr('tray.active'), type: 'checkbox', checked: cfg.active, click: (item) => setActive(item.checked), ...hotkeyLabel('toggleOverlay') },
     { label: tr('tray.panel'), click: togglePanel, ...hotkeyLabel('togglePanel') },
+    { label: tr('tray.profiles'), click: openProfileSettings },
     {
       label: tr('tray.helperStart'),
       visible: IS_WIN && !state.helperConnected && !state.isAdmin && cfg.hotkeysEnabled,
@@ -658,8 +740,6 @@ ipcMain.on('overlay:keyboard', (event, wanted) => {
 ipcMain.on('overlay:settings', (event, patch) => {
   if (!fromOverlay(event) || !patch || typeof patch !== 'object') return;
   const allowed = {};
-  if (Array.isArray(patch.enabledTypes)) allowed.enabledTypes = patch.enabledTypes.filter((t) => /^o\d+$/.test(t));
-  if (typeof patch.hideFound === 'boolean') allowed.hideFound = patch.hideFound;
   if (typeof patch.showInCaptures === 'boolean') {
     allowed.showInCaptures = patch.showInCaptures;
     overlayWin.setContentProtection(!patch.showInCaptures);
@@ -667,12 +747,6 @@ ipcMain.on('overlay:settings', (event, patch) => {
   if (Number.isFinite(patch.opacity)) allowed.opacity = Math.min(1, Math.max(0.2, patch.opacity));
   if (Number.isFinite(patch.markerSize)) allowed.markerSize = Math.min(48, Math.max(14, patch.markerSize));
   updateSettings(allowed);
-});
-
-ipcMain.on('overlay:found-toggle', (event, id) => {
-  if (!fromOverlay(event)) return;
-  const isFound = found.toggle(id);
-  sendToOverlay('found:changed', { id: Number(id), found: isFound });
 });
 
 ipcMain.on('overlay:refresh-data', (event) => {

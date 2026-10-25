@@ -119,15 +119,15 @@ test('newer envelope schemas are rejected without rewriting them', () => {
 });
 
 test('local envelope byte limit includes UTF-8 and rejects rather than truncating', () => {
-  const value = envelope(makeState({ region: '🗺'.repeat(43) }));
-  // This fixture fits in UTF-16 code units but exceeds 16 MiB in UTF-8 bytes.
-  value.clock = Number.MAX_SAFE_INTEGER;
-  const register = { value: false, clock: Number.MAX_SAFE_INTEGER, actor: ACTOR_A };
-  for (let i = 1; i <= 174099; i++) value.state.profiles[PROFILE_A].markers[i] = { ...register };
-  assert.ok(JSON.stringify(value).length <= LIMITS.LOCAL_ENVELOPE_BYTES);
-  assert.ok(Buffer.byteLength(JSON.stringify(value)) > LIMITS.LOCAL_ENVELOPE_BYTES);
+  const value = envelope();
+  const records = Array.from({ length: 120000 }, (_, i) => ({ provider: 'bwiki', map: 'other', catalog: { generation: 'old', fingerprint: 'opaque' }, record: { id: String(i), map: 'other', category: '🐉'.repeat(128), level: '🐉'.repeat(128), state: true, position: null }, mapping: null }));
+  value.extensions = { transfer: { version: 1, profiles: { [PROFILE_A]: { version: 1, records, imports: [] } } } };
+  // Valid attachment strings fit under 128 MiB in UTF-16 code units but exceed it as UTF-8.
+  const serialized = JSON.stringify(value);
+  assert.ok(serialized.length <= LIMITS.LOCAL_ENVELOPE_BYTES);
+  assert.ok(Buffer.byteLength(serialized) > LIMITS.LOCAL_ENVELOPE_BYTES);
   rejects(() => validateEnvelope(value, { kind: 'local' }), 'limit-exceeded');
-  assert.equal(Object.keys(value.state.profiles[PROFILE_A].markers).length, 174099);
+  assert.equal(value.extensions.transfer.profiles[PROFILE_A].records.length, 120000);
 });
 
 

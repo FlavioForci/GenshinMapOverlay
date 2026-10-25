@@ -256,6 +256,22 @@ Arrange `onChange` in the first test to invoke the actual renderer refresh adapt
 - [ ] **Step 6: Verify** `npm run test:progress`, `node --check src/main.js`, `node --check src/overlay/overlay.js`, `node --check src/settings/settings.js` and `git diff --check`. Expected: all tests PASS, syntax checks exit 0, and no whitespace errors. Run `rg -n 'FoundStore|overlay:found-toggle|found:all|found:changed' src`; expected no matches (exit 1). In `npm start` verify right-click/undo, F9, profile focus/switch, counters/spot refresh, restart and canceled dialogs with local test data. Windows/macOS packaged checks are completed in the transfer plan's delivery task.
 - [ ] **Step 7: Commit** only the listed files/hunks: `git commit -m "feat: integrate authoritative local profiles and shared settings"`.
 
+### Task 7: Drain accepted renderer edits before profile boundaries
+
+**Problem/evidence:** profile-switch-probe.json confirms an accepted optimistic undo can be silently lost when a settings profile switch enters the service queue before the renderer sends that undo. Exports can likewise read a stale intermediate state.
+
+**Files:** Create src/progress/client-barrier.js and tests/progress/client-barrier.test.js; modify src/progress/ipc.js, src/main.js, and focused existing progress integration tests as needed. Reuse createRendererQuitDrain from app-lifecycle.js and the production ProgressView; preserve narrow preloads and exact local document guards.
+
+**Main-only contract:** createClientProgressBarrier({overlayDrain,quitDrain}) exports run(operation):Promise<T>, shutdown(operation):Promise<void>, active():boolean, dispose(). run queues outside ProgressService, prepares/freezes/drains overlay, invokes trusted callback, then resumes overlay on success/failure. shutdown immediately rejects new run submissions, queues behind already accepted runs, prepares all clients then drains service; failed shutdown resumes clients/reopens acceptance for retry. Existing accepted runs finish even if quit is submitted later. A shared FIFO ensures drain nonce lifecycles do not overlap. Keep the service Electron-free.
+
+Extend registerProgressIpc with optional main-owned withProgressBarrier(operation), default calling operation. Profile selections (ordinary and settings), create, import-backup, export-backup, restore-local and retry-local use the barrier. Dialogs and bounded file validation happen first; prepare only around the bounded service operation, never while user interacts with a picker. Recheck captured owner/frame and current session after waiting for drain before touching service/file mutation. Preserve final reply gates and allow intentional session rotations. Rename and ordinary found/preference setters need no barrier. Renderer payload cannot select/inject a callback.
+
+main owns separate overlay-only and all-client quit drains with one shared barrier. Overlay-only avoids deadlocking on the initiating pending settings command. Quit runs through barrier.shutdown; block opening settings during preparation; dispose all resources only after successful drain. Keep failed-quit visible errors/retry. This callback is the shared trusted boundary for future transfer preview/apply/export.
+
+**Tests first:** (1) actual production view/service/repository/IPC with held mark, queued undo, switchB/switchA persists false; (2) export with that pending undo excludes42; (3) failed prepare performs no profile/file mutation, resumes edits, retry works; (4) accepted profile run then quit finishes in order without settings self-deadlock; (5) new operations during quit reject safely; (6) failed quit reopens acceptance and retries; (7) frame/session change during drain invalidates continuation. Preserve existing forged/stale ACK tests. Use temporary test data only.
+
+Run focused tests, npm run test:progress, npm run test:transfer, node --check src/main.js, git diff --check. No commit/staging (grouped commits by controller), no new dependencies, no subagents. Report implementation/API, RED/GREEN evidence, self-review, concerns.
+
 ## Handoff
 
 Then execute the linked transfer plan. When Drive work begins, reuse these files and the transfer extension; extend the service/runtime/IPC/window rather than rerunning migration or replacing the repository. The only deliberate refinement to its old context contract is session invalidation on every profile activation. Its canonical register and cloud wire formats remain unchanged.

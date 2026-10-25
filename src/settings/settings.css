@@ -1,0 +1,18 @@
+:root { --u: 1px; }
+html, body { height: auto; min-height: 100%; overflow: auto; background: #262c3a; font: 15px/1.5 "Segoe UI", system-ui, sans-serif; user-select: text; }
+main { max-width: 760px; margin: auto; padding: 28px 32px; }
+header, .row { display: flex; align-items: center; gap: 12px; }
+h1 { font-size: 24px; margin: 0; color: var(--gold); }
+h2 { font-size: 18px; color: var(--gold); margin-top: 0; }
+section { border-top: 1px solid var(--gold-line); margin-top: 24px; padding-top: 18px; }
+label { display: block; margin: 12px 0 5px; color: var(--cream); }
+input, select { width: 100%; min-width: 0; padding: 10px; color: var(--slate-dark); background: var(--cream); border: 1px solid var(--gold); border-radius: 3px; font: inherit; }
+button { border: 1px solid var(--gold); border-radius: 3px; background: var(--cream); color: var(--slate-dark); padding: 10px 16px; }
+button:hover { background: var(--cream-hover); }
+button:disabled, input:disabled, select:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.row { flex-wrap: wrap; }
+.row select { flex: 1; }
+.hint { font-size: 13px; color: var(--muted); }
+#status { padding: 10px 12px; border-left: 2px solid var(--gold); background: var(--slate-dark); }
+[hidden] { display: none !important; }

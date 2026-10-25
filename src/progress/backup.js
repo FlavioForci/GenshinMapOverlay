@@ -3,6 +3,7 @@
 const { TextDecoder } = require('node:util');
 const { ProgressError, LIMITS, validateState } = require('./schema');
 const { foundIds } = require('./merge');
+const { validateAttachments } = require('../transfer/attachments');
 const FORMAT = 'genshin-map-overlay.backup';
 const NAMESPACE = 'appsample:gim:2';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -22,9 +23,12 @@ function array(value, maximum) {
 }
 function portable(value) {
   // Inspect version only after validating its data descriptor, without invoking accessors.
-  record(value, ['format', 'version', 'namespace', 'profiles']);
-  if (Number.isSafeInteger(value.version) && value.version > 1) fail('unsupported-version');
-  if (value.format !== FORMAT || value.version !== 1 || value.namespace !== NAMESPACE) fail();
+  if (!value || typeof value !== 'object') fail();
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'version');
+  if (!descriptor || !Object.hasOwn(descriptor, 'value')) fail();
+  if (Number.isSafeInteger(descriptor.value) && descriptor.value > 2) fail('unsupported-version');
+  record(value, ['format', 'version', 'namespace', 'profiles', ...(descriptor.value === 2 ? ['extensions'] : [])]);
+  if (value.format !== FORMAT || ![1, 2].includes(value.version) || value.namespace !== NAMESPACE) fail();
   array(value.profiles, LIMITS.PROFILES);
   if (!value.profiles.length) fail();
   const profiles = []; let count = 0;
@@ -43,15 +47,33 @@ function portable(value) {
     } catch (error) { fail(error.code === 'limit-exceeded' ? error.code : 'invalid-backup'); }
     profiles.push({ name: item.name, region: item.region, foundIds: [...new Set(item.foundIds)].sort((a, b) => a - b), enabledTypes, hideFound: item.hideFound });
   }
-  const result = { format: FORMAT, version: 1, namespace: NAMESPACE, profiles };
-  if (Buffer.byteLength(JSON.stringify(result)) > LIMITS.PORTABLE_BODY_BYTES) fail('limit-exceeded');
+  const result = { format: FORMAT, version: value.version, namespace: NAMESPACE, profiles };
+  if (value.version === 2) {
+    record(value.extensions, ['transfer']); record(value.extensions.transfer, ['version', 'profiles']);
+    if (Number.isSafeInteger(value.extensions.transfer.version) && value.extensions.transfer.version > 1) fail('unsupported-version');
+    if (value.extensions.transfer.version !== 1) fail();
+    let attachments;
+    try { attachments = validateAttachments(value.extensions.transfer.profiles, profiles.map((_, i) => String(i))); }
+    catch (error) { fail(error.code === 'unsupported-version' ? error.code : 'invalid-backup'); }
+    if (!Object.keys(attachments).length) fail();
+    result.extensions = { transfer: { version: 1, profiles: attachments } };
+  }
+  if (Buffer.byteLength(JSON.stringify(result)) > (value.version === 2 ? LIMITS.PORTABLE_ATTACHMENT_BYTES : LIMITS.PORTABLE_BODY_BYTES)) fail('limit-exceeded');
   return result;
 }
 
-/** @typedef {{format:'genshin-map-overlay.backup',version:1,namespace:'appsample:gim:2',profiles:Array<{name:string,region:string,foundIds:number[],enabledTypes:string[],hideFound:boolean}>}} PortableBackup */
+/** @typedef {{name:string,region:string,foundIds:number[],enabledTypes:string[],hideFound:boolean}} PortableProfile */
+/** @typedef {{format:'genshin-map-overlay.backup',version:1,namespace:'appsample:gim:2',profiles:PortableProfile[]}} PortableBackupV1 */
+/** @typedef {{format:'genshin-map-overlay.backup',version:2,namespace:'appsample:gim:2',profiles:PortableProfile[],extensions:{transfer:{version:1,profiles:Record<string,import('../transfer/attachments').ProfileAttachment>}}}} PortableBackupV2 */
+/** @typedef {PortableBackupV1} PortableBackup */
 
-/** Export only effective progress; never include local IDs, clocks, actors or metadata. @param {import('./schema').ProgressState} state @param {string[]} profileIds @returns {string} */
-function exportBackup(state, profileIds) {
+/** Export effective progress and optional local provenance, without local profile IDs or registers.
+ * @param {import('./schema').ProgressState} state
+ * @param {string[]} profileIds
+ * @param {{transferByProfile?:Record<string,import('../transfer/attachments').ProfileAttachment>}} [options]
+ * @returns {string}
+ */
+function exportBackup(state, profileIds, { transferByProfile = {} } = {}) {
   const valid = validateState(state);
   array(profileIds, LIMITS.PROFILES);
   if (!profileIds.length || new Set(profileIds).size !== profileIds.length) fail();
@@ -60,15 +82,21 @@ function exportBackup(state, profileIds) {
     const p = valid.profiles[id];
     return { name: p.name.value, region: p.region.value, foundIds: foundIds(p), enabledTypes: p.enabledTypes.value, hideFound: p.hideFound.value };
   });
-  return JSON.stringify(portable({ format: FORMAT, version: 1, namespace: NAMESPACE, profiles }));
+  let attachments;
+  try { attachments = validateAttachments(transferByProfile, Object.keys(valid.profiles)); } catch (error) { fail(error.code === 'unsupported-version' ? error.code : 'invalid-backup'); }
+  const exported = {};
+  profileIds.forEach((id, index) => { if (Object.hasOwn(attachments, id)) exported[String(index)] = attachments[id]; });
+  const hasAttachments = Object.keys(exported).length > 0;
+  return JSON.stringify(portable({ format: FORMAT, version: hasAttachments ? 2 : 1, namespace: NAMESPACE, profiles, ...(hasAttachments ? { extensions: { transfer: { version: 1, profiles: exported } } } : {}) }));
 }
 
-/** Validate the entire bounded UTF-8 body before returning detached portable data. @param {Buffer} bytes @returns {PortableBackup} */
+/** Validate the entire bounded UTF-8 body before returning detached portable data. @param {Buffer} bytes @returns {PortableBackupV1|PortableBackupV2} */
 function parseBackup(bytes) {
   if (!Buffer.isBuffer(bytes)) fail();
-  if (bytes.length > LIMITS.PORTABLE_BODY_BYTES) fail('limit-exceeded');
+  if (bytes.length > LIMITS.PORTABLE_ATTACHMENT_BYTES) fail('limit-exceeded');
   let value;
-  try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { fail(); }
+  try { value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { if (bytes.length > LIMITS.PORTABLE_BODY_BYTES) fail('limit-exceeded'); fail(); }
+  if (value?.version !== 2 && bytes.length > LIMITS.PORTABLE_BODY_BYTES) fail('limit-exceeded');
   return portable(value);
 }
 
@@ -77,7 +105,7 @@ function parseBackup(bytes) {
  * Validate portable input, every generated ID, clocks and aggregate state before
  * changing the draft. Existing explicit undo registers remain intact.
  * @param {import('./schema').LocalEnvelope} draft
- * @param {PortableBackup} backup
+ * @param {PortableBackupV1|PortableBackupV2} backup
  * @param {{actor:string,uuid:()=>string}} options
  * @returns {string[]}
  */
@@ -102,7 +130,16 @@ function importProfiles(draft, backup, { actor, uuid }) {
     };
   });
   const state = validateState({ namespace: NAMESPACE, profiles });
+  let extensions = draft.extensions;
+  if (input.version === 2) {
+    const combined = { ...(draft.extensions?.transfer.profiles || {}) };
+    for (const [index, attachment] of Object.entries(input.extensions.transfer.profiles)) combined[ids[Number(index)]] = attachment;
+    let validated;
+    try { validated = validateAttachments(combined, Object.keys(state.profiles)); } catch (error) { fail(error.code === 'unsupported-version' ? error.code : 'invalid-backup'); }
+    extensions = { transfer: { version: 1, profiles: validated } };
+  }
   draft.state = state; draft.clock = clock; draft.dirtyRevision = draft.revision + 1;
+  if (extensions !== undefined) draft.extensions = extensions;
   return ids;
 }
 

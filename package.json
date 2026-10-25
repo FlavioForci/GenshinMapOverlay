@@ -9,6 +9,8 @@
   "scripts": {
     "start": "electron .",
     "test:match": "node tools/match-test.js",
+    "test:progress": "node --test \"tests/progress/*.test.js\"",
+    "test:transfer": "node --test \"tests/transfer/*.test.js\"",
     "dist": "electron-builder --win nsis",
     "data:build": "node server/tools/build-data.js",
     "data:import-comments": "node server/tools/import-comments.js",
@@ -16,8 +18,10 @@
     "server:deploy": "wrangler pages deploy public --cwd server",
     "data:import-icons": "node server/tools/import-icons.js",
     "data:import-photos": "node server/tools/import-photos.js",
-    "dist:mac": "electron-builder --mac --arm64 --publish never",
-    "test:progress": "node --test \"tests/progress/*.test.js\""
+    "dist:mac": "electron-builder --mac --arm64 --publish never"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "build": {
     "appId": "local.genshin-map-overlay",
@@ -77,8 +81,5 @@
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1"
-  },
-  "engines": {
-    "node": ">=22.12.0"
   }
 }

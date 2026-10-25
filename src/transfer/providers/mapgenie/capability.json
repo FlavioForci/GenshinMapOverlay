@@ -1,0 +1,170 @@
+{
+  "provider": "mapgenie",
+  "adapterVersion": "0.1.0",
+  "status": "planned",
+  "variants": [
+    {
+      "id": "website-unverified-tier",
+      "origins": [
+        "https://mapgenie.io"
+      ],
+      "map": "mapgenie:43:121",
+      "generation": "map.c8b3a1c6:game43:map121",
+      "accountTier": "unverified",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/maps/121/data"
+        },
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/map-data/121"
+        },
+        {
+          "method": "PUT",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        },
+        {
+          "method": "DELETE",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        }
+      ],
+      "statePaths": [
+        "window.store.getState().user.foundLocations",
+        "window.store.getState().user.activeProfileId"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "account-tier-acceptance-pending"
+    },
+    {
+      "id": "website-free",
+      "origins": [
+        "https://mapgenie.io"
+      ],
+      "map": "mapgenie:43:121",
+      "generation": "map.c8b3a1c6:game43:map121",
+      "accountTier": "website-free",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/maps/121/data"
+        },
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/map-data/121"
+        },
+        {
+          "method": "PUT",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        },
+        {
+          "method": "DELETE",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        }
+      ],
+      "statePaths": [
+        "window.store.getState().user.foundLocations",
+        "window.store.getState().user.activeProfileId"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "account-tier-acceptance-pending"
+    },
+    {
+      "id": "website-pro",
+      "origins": [
+        "https://mapgenie.io"
+      ],
+      "map": "mapgenie:43:121",
+      "generation": "map.c8b3a1c6:game43:map121",
+      "accountTier": "website-pro",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/maps/121/data"
+        },
+        {
+          "method": "GET",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/map-data/121"
+        },
+        {
+          "method": "PUT",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        },
+        {
+          "method": "DELETE",
+          "origin": "https://mapgenie.io",
+          "path": "/api/v1/user/locations/{id}"
+        }
+      ],
+      "statePaths": [
+        "window.store.getState().user.foundLocations",
+        "window.store.getState().user.activeProfileId"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "account-tier-acceptance-pending"
+    }
+  ],
+  "reasonCode": "account-tier-acceptance-pending"
+}

@@ -1,7 +1,6 @@
 // %APPDATA%\Genshin Map Overlay\settings.json
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
 
 const DEFAULT_PROFILE_PREFERENCES = Object.freeze({
   enabledTypes: Object.freeze(['o5', 'o6', 'o141', 'o194', 'o403', 'o508', 'o626', 'o694', 'o833']),
@@ -39,6 +38,7 @@ const DEFAULTS = {
 };
 
 function filePath() {
+  const { app } = require('electron');
   return path.join(app.getPath('userData'), 'settings.json');
 }
 

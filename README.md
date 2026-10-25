@@ -73,7 +73,25 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 - Clicks next to markers go to the game as usual (drag, zoom, set waypoints).
 - Outside the map the game locks the mouse. Hold **Alt** to click in the panel there.
 
-Found markers are saved only on your PC (`%APPDATA%\Genshin Map Overlay\found.json`).
+Progress is saved locally in named profiles. Open **Profiles & transfers** from the tray menu or the
+marker panel to create a profile, edit its name and region / note, or switch profiles. Each profile has
+its own found markers, marker filters and F9 visibility preference.
+
+On Windows, local files live in `%APPDATA%\Genshin Map Overlay\progress`; on macOS they live in
+`~/Library/Application Support/Genshin Map Overlay/progress`. The first upgrade imports `found.json`
+and the old marker preferences from `settings.json` once, preserving their original bytes in internal
+recovery backups. Later changes to those legacy fields do not change profile progress.
+
+Use **Export all profiles…** to save a portable JSON backup. **Import backup…** adds new profiles,
+keeps existing ones and activates the first imported profile. Canceling either dialog changes nothing.
+These backups contain effective progress and profile preferences, with no account or installation
+identity. Keep a copy outside the app folder; no Google account or cloud setup is required.
+
+If local files cannot be read or a save cannot be confirmed, progress becomes read-only. In
+**Profiles & transfers**, use **Retry local files** after fixing storage access; this reads current data
+without restoring older progress. **Restore last good backup** explicitly replaces local progress with
+the validated previous save and preserves original files for recovery. If quitting cannot finish a save,
+the app stays open with an error; resolve the storage problem and quit again.
 
 ## Is it safe for my account?
 
@@ -126,7 +144,7 @@ Windows Settings → Apps → **Genshin Map Overlay**. Settings, cache and found
 
 ## Building from source
 
-Requires [Node.js](https://nodejs.org) 20 or newer.
+Requires [Node.js](https://nodejs.org) 22.12.0 or newer.
 
 ```bash
 npm install

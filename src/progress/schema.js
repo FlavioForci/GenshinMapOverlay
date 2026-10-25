@@ -4,10 +4,13 @@
 /** @typedef {{name:Register<string>, region:Register<string>, enabledTypes:Register<string[]>, hideFound:Register<boolean>, markers:Record<string,Register<boolean>>}} Profile */
 /** @typedef {{namespace:'appsample:gim:2', profiles:Record<string,Profile>}} ProgressState */
 /** @typedef {{kind:'local'}|{kind:'account',accountKey:string}} Scope */
-/** @typedef {{version:1,state:ProgressState,clock:number,revision:number,dirtyRevision:number,acknowledgedRevision:number,selectedProfileId:string|null,migrationComplete:boolean,sync:null}} LocalEnvelope */
+/** @typedef {{version:1,state:ProgressState,clock:number,revision:number,dirtyRevision:number,acknowledgedRevision:number,selectedProfileId:string|null,migrationComplete:boolean,sync:null,extensions?:{transfer:{version:1,profiles:Record<string,import('../transfer/attachments').ProfileAttachment>}}}} LocalEnvelope */
+
+const { validateAttachments } = require('../transfer/attachments');
 
 const LIMITS = Object.freeze({
-  LOCAL_ENVELOPE_BYTES: 16 * 1024 * 1024,
+  LOCAL_ENVELOPE_BYTES: 128 * 1024 * 1024,
+  PORTABLE_ATTACHMENT_BYTES: 96 * 1024 * 1024,
   PORTABLE_BODY_BYTES: 4 * 1024 * 1024,
   PROFILES: 100,
   MARKERS: 200000,
@@ -118,7 +121,7 @@ function maxClock(state) {
   return clock;
 }
 
-/** Validate local persistence. Account sync and transfer extension schemas are future owners' responsibilities. @returns {LocalEnvelope} */
+/** Validate local persistence. Only the declared local transfer extension is accepted; canonical state stays unchanged. @returns {LocalEnvelope} */
 function validateEnvelope(value, scope) {
   record(scope, 'invalid-scope');
   if (scope.kind === 'account') {
@@ -130,7 +133,7 @@ function validateEnvelope(value, scope) {
   requireValue(scope.kind === 'local', 'invalid-scope');
   record(value, 'invalid-envelope');
   if (Number.isSafeInteger(value.version) && value.version > 1) fail('unsupported-version');
-  record(value, 'invalid-envelope', ['version', 'state', 'clock', 'revision', 'dirtyRevision', 'acknowledgedRevision', 'selectedProfileId', 'migrationComplete', 'sync']);
+  record(value, 'invalid-envelope', ['version', 'state', 'clock', 'revision', 'dirtyRevision', 'acknowledgedRevision', 'selectedProfileId', 'migrationComplete', 'sync', ...(Object.hasOwn(value, 'extensions') ? ['extensions'] : [])]);
   requireValue(value.version === 1, 'invalid-envelope');
   const state = validateState(value.state);
   for (const field of ['clock', 'revision', 'dirtyRevision', 'acknowledgedRevision']) requireValue(counter(value[field]), 'invalid-envelope');
@@ -143,6 +146,16 @@ function validateEnvelope(value, scope) {
     dirtyRevision: value.dirtyRevision, acknowledgedRevision: value.acknowledgedRevision,
     selectedProfileId: value.selectedProfileId, migrationComplete: value.migrationComplete, sync: null,
   };
+  if (Object.hasOwn(value, 'extensions')) {
+    record(value.extensions, 'invalid-envelope', ['transfer']);
+    record(value.extensions.transfer, 'invalid-envelope', ['version', 'profiles']);
+    if (Number.isSafeInteger(value.extensions.transfer.version) && value.extensions.transfer.version > 1) fail('unsupported-version');
+    requireValue(value.extensions.transfer.version === 1, 'invalid-envelope');
+    let profiles;
+    try { profiles = validateAttachments(value.extensions.transfer.profiles, Object.keys(state.profiles)); }
+    catch (error) { fail(error.code === 'unsupported-version' ? error.code : 'invalid-envelope'); }
+    result.extensions = { transfer: { version: 1, profiles } };
+  }
   requireValue(Buffer.byteLength(JSON.stringify(result), 'utf8') <= LIMITS.LOCAL_ENVELOPE_BYTES, 'limit-exceeded');
   return result;
 }

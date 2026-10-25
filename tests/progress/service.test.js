@@ -383,3 +383,82 @@ test('restore activation survives persistent uncertainty until later durable rec
   const durable = await f.repository.load(local);
   assert.equal(durable.state.profiles[old.profileId].markers['43'], undefined);
 });
+
+function localTransfer() {
+  return { version: 1, records: [{ provider: 'bwiki', map: 'unsupported-realm', catalog: { generation: 'synthetic', fingerprint: 'opaque' }, record: { id: 'unknown-id', map: 'unsupported-realm', category: null, level: null, state: true, position: null }, mapping: null }], imports: [] };
+}
+
+test('service persists, exports, remaps, archives and restores canonical state with local provenance', async t => {
+  const f = await ready(t); const ctx = context(f.service); const a = localTransfer();
+  await f.service.runProfileTransaction(ctx, { reason: 'import' }, (draft, actor) => {
+    setFound(draft, { profileId: ctx.profileId, id: 42, found: true }, actor);
+    draft.extensions = { transfer: { version: 1, profiles: { [ctx.profileId]: a } } };
+  });
+  const saved = await f.repository.load(local);
+  assert.equal(saved.state.profiles[ctx.profileId].markers['42'].value, true);
+  assert.deepEqual(saved.extensions.transfer.profiles[ctx.profileId], a);
+  const exported = await f.service.exportBackup({ ...generation(f.service), profileIds: [ctx.profileId] });
+  assert.equal(exported.ok, true); assert.equal(JSON.parse(exported.value).version, 2);
+  const imported = await f.service.importBackup({ ...generation(f.service), bytes: Buffer.from(exported.value) });
+  assert.equal(imported.ok, true); const importedId = context(f.service).profileId;
+  assert.notEqual(importedId, ctx.profileId);
+  const after = await f.repository.load(local);
+  assert.deepEqual(after.extensions.transfer.profiles[importedId], a);
+  const archives = await fs.readdir(path.join(f.root, 'backups'));
+  const importArchives = await Promise.all(archives.filter(name => name.startsWith('local-import-')).map(name => fs.readFile(path.join(f.root, 'backups', name), 'utf8')));
+  assert.ok(importArchives.some(body => JSON.parse(body).extensions?.transfer.profiles[ctx.profileId]?.records[0].record.id === 'unknown-id'));
+  await fs.writeFile(path.join(f.root, 'local/state.json'), '{broken');
+  await f.service.initialize({ userData: f.userData });
+  assert.equal((await f.service.restoreLocalBackup(generation(f.service))).ok, true);
+  const restored = await f.repository.load(local);
+  assert.deepEqual(restored.extensions, saved.extensions);
+  assert.deepEqual(restored.state, saved.state);
+  assert.equal(JSON.stringify(f.service.snapshot()).includes('extensions'), false);
+});
+
+test('unknown stored transfer versions require recovery without dropping or rewriting original bytes', async t => {
+  const f = await ready(t); const file = path.join(f.root, 'local/state.json');
+  const value = await f.repository.load(local); value.extensions = { transfer: { version: 2, profiles: {} } };
+  const original = JSON.stringify(value); await fs.writeFile(file, original);
+  const snapshot = await f.service.initialize({ userData: f.userData });
+  assert.equal(snapshot.sync.phase, 'recovery'); assert.equal(snapshot.sync.code, 'unsupported-version');
+  assert.equal(await fs.readFile(file, 'utf8'), original);
+});
+
+test('directory-sync uncertainty reconciles canonical state and attachment as the same new file', async t => {
+  let armed = false;
+  const f = await ready(t, { adapter: { ...fs, rename: async (source, target) => {
+    await fs.rename(source, target);
+    if (armed && target.endsWith('/local/state.json')) { armed = false; throw Object.assign(Error('interrupted after rename'), { code: 'EIO' }); }
+  } } });
+  const ctx = context(f.service); armed = true;
+  await assert.rejects(f.service.runProfileTransaction(ctx, { reason: 'edit' }, (draft, actor) => {
+    setFound(draft, { profileId: ctx.profileId, id: 42, found: true }, actor);
+    draft.extensions = { transfer: { version: 1, profiles: { [ctx.profileId]: localTransfer() } } };
+  }), { code: 'local-durability-uncertain' });
+  const durable = await f.repository.load(local);
+  assert.equal(durable.state.profiles[ctx.profileId].markers['42'].value, true);
+  assert.equal(durable.extensions.transfer.profiles[ctx.profileId].records[0].record.id, 'unknown-id');
+  assert.equal(f.service.envelope.extensions.transfer.profiles[ctx.profileId].records[0].record.id, 'unknown-id');
+});
+
+test('local filesystem reads accept 128 MiB and reject one over without rewriting data', async t => {
+  const f = await ready(t); const file = path.join(f.root, 'local/state.json'); const value = await f.repository.load(local);
+  const limit = 128 * 1024 * 1024; const body = Buffer.alloc(limit, 32); Buffer.from(JSON.stringify(value)).copy(body);
+  await fs.writeFile(file, body);
+  assert.deepEqual((await f.repository.load(local)).state, value.state);
+  await fs.appendFile(file, ' ');
+  await assert.rejects(f.repository.load(local), { code: 'local-recovery-required' });
+  assert.equal((await fs.stat(file)).size, limit + 1);
+});
+
+test('invalid local attachment edits fail before publication and preserve canonical state', async t => {
+  const f = await ready(t); const ctx = context(f.service); const before = await f.repository.load(local); const viewVersion = f.service.snapshot().viewVersion;
+  await assert.rejects(f.service.runProfileTransaction(ctx, { reason: 'edit' }, (draft, actor) => {
+    setFound(draft, { profileId: ctx.profileId, id: 42, found: true }, actor);
+    const a = localTransfer(); a.records[0].record.state = 1;
+    draft.extensions = { transfer: { version: 1, profiles: { [ctx.profileId]: a } } };
+  }), { code: 'invalid-envelope' });
+  assert.deepEqual(await f.repository.load(local), before);
+  assert.equal(f.service.snapshot().viewVersion, viewVersion);
+});

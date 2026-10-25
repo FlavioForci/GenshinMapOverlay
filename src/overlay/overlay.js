@@ -1,6 +1,6 @@
 // Overlay: Marker auf der Ingame-Karte + Panel.
 // Maus nur über Marker/Panel abfangen, sonst geht alles ans Spiel (ziehen, zoomen, Wegpunkte).
-/* global I18n, Media, Hud */
+/* global I18n, Media, Hud, ProgressView */
 const api = window.overlayApi;
 const $ = (id) => document.getElementById(id);
 
@@ -18,6 +18,7 @@ let markersByType = [];
 let enabled = new Set();
 let found = new Set();
 let foundByType = new Uint32Array(0);
+let progressWritable = false;
 let trackerStatus = { phase: 'starting', message: '', progress: 0 };
 let target = null;
 let velocity = null;
@@ -424,8 +425,7 @@ window.addEventListener('contextmenu', (event) => event.preventDefault());
 
 function toggleFoundMarker(index) {
   const id = data.markers.id[index];
-  setFound(id, !found.has(id));
-  api.toggleFound(id);
+  void progressView.setFound(id, !found.has(id));
 }
 
 // ---------- Gefunden ----------
@@ -439,18 +439,36 @@ function recountFound() {
   }
 }
 
-function setFound(id, isFound) {
-  if (found.has(id) === isFound) return;
-  if (isFound) found.add(id);
-  else found.delete(id);
-  const i = markerIndexById.get(id);
-  if (i !== undefined) {
-    foundByType[data.markers.type[i]] += isFound ? 1 : -1;
-    updateTypeCount(data.markers.type[i]);
-  }
-  if (spot && data.markers.id[spot.index] === id) renderSpotFound();
-  requestDraw();
-}
+const refreshProgress = ProgressView.createProgressRefreshAdapter({
+  replaceFound: ids => { found = new Set(ids); },
+  replacePreferences: (keys, hideFound) => {
+    settings.enabledTypes = keys;
+    settings.hideFound = hideFound;
+    enabled = new Set(keys.map(key => typeIndexByKey.get(key)).filter(type => type !== undefined));
+  },
+  recount: recountFound,
+  refreshFilters: () => {
+    if (!data) return;
+    for (let type = 0; type < data.types.length; type++) updateTypeCount(type);
+    updateCategoryHeads();
+  },
+  refreshSpot: renderSpotFound, closeSpot, closeLightbox,
+  renderControls: writable => {
+    progressWritable = writable;
+    renderSettings();
+    $('hide-found').disabled = !writable;
+    $('spot-found').disabled = !writable;
+    $('none').disabled = !writable;
+    for (const checkbox of document.querySelectorAll('#categories input')) checkbox.disabled = !writable;
+  },
+  redraw: requestDraw,
+});
+const progressView = ProgressView.createProgressView({
+  sendSetFound: payload => api.setFound(payload),
+  sendSetPreferences: payload => api.setProfilePreferences(payload),
+  onChange: refreshProgress,
+  onError: error => showToast(tt(error.messageKey || 'progress.error.local-operation-failed')),
+});
 
 // ---------- Fundort-Karte ----------
 
@@ -671,7 +689,8 @@ function updateCategoryHeads() {
 }
 
 function saveEnabled() {
-  api.saveSettings({ enabledTypes: [...enabled].map((t) => data.types[t].key) });
+  const enabledTypes = ProgressView.mergeVisibleTypes(progressView.current().enabledTypes, data.types.map(type => type.key), [...enabled].map(type => data.types[type].key));
+  void progressView.setPreferences({ enabledTypes });
   updateCategoryHeads();
   requestDraw();
 }
@@ -845,7 +864,10 @@ $('refresh').addEventListener('click', () => {
   $('data-info').textContent = tt('ui.loadingData');
   api.refreshData();
 });
-$('hide-found').addEventListener('change', (event) => api.saveSettings({ hideFound: event.target.checked }));
+$('hide-found').addEventListener('change', event => { void progressView.setPreferences({ hideFound: event.target.checked }); });
+$('profiles-settings').addEventListener('click', () => {
+  api.openProfileSettings().then(result => { if (!result.ok) showToast(tt(result.error.messageKey)); }).catch(() => showToast(tt('progress.error.local-operation-failed')));
+});
 $('show-captures').addEventListener('change', (event) => api.saveSettings({ showInCaptures: event.target.checked }));
 // --fill: Regler links vom Griff hell, rechts dunkel (overlay.css)
 function updateRangeFill(input) {
@@ -884,7 +906,7 @@ search.addEventListener('input', applySearch);
 
 api.on('settings', (next) => {
   const languageChanged = next.language !== settings.language;
-  settings = next;
+  settings = { ...next, enabledTypes: settings.enabledTypes, hideFound: settings.hideFound };
   if (languageChanged) {
     applyStaticTexts();
     renderStatus();
@@ -915,18 +937,34 @@ api.on('data:markers', (payload) => {
   enabled = new Set(settings.enabledTypes.map((k) => typeIndexByKey.get(k)).filter((t) => t !== undefined));
   recountFound();
   buildPanel();
+  refreshProgress(progressView.current(), { writable: progressWritable });
   renderDataInfo();
   requestDraw();
 });
 
-api.on('found:all', (ids) => {
-  found = new Set(ids.map(Number));
-  recountFound();
-  if (data) for (let t = 0; t < data.types.length; t++) updateTypeCount(t);
-  requestDraw();
+const quitSubscriptions = [
+  api.onPrepareQuit(async ({ requestId }) => {
+    let ok = false;
+    try { ok = await progressView.prepareQuit(requestId); } catch { /* Main keeps quit prevented. */ }
+    api.quitReady({ requestId, ok });
+  }),
+  api.onResumeAfterQuit(({ requestId }) => progressView.resumeAfterQuit(requestId)),
+];
+window.addEventListener('beforeunload', () => quitSubscriptions.forEach(unsubscribe => unsubscribe()), { once: true });
+api.on('progress:snapshot', snapshot => progressView.applySnapshot(snapshot));
+api.on('progress:toggle-hide-found', () => {
+  if (!progressWritable) {
+    showToast(tt('progress.error.local-recovery-required'));
+    return;
+  }
+  const hideFound = !progressView.current().hideFound;
+  void progressView.setPreferences({ hideFound });
+  showToast(tt(hideFound ? 'notice.foundHidden' : 'notice.foundShown'));
 });
-
-api.on('found:changed', ({ id, found: isFound }) => setFound(id, isFound));
+api.getProgress().then(result => {
+  if (result.ok) progressView.applySnapshot(result.value);
+  else { progressView.applySnapshot(result.snapshot); showToast(tt(result.error.messageKey)); }
+}).catch(() => showToast(tt('progress.error.local-operation-failed')));
 
 api.on('tracker:status', (next) => {
   trackerStatus = next;

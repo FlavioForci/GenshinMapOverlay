@@ -1,0 +1,136 @@
+{
+  "provider": "bwiki",
+  "adapterVersion": "0.1.0",
+  "status": "unavailable",
+  "variants": [
+    {
+      "id": "map4-indexeddb",
+      "origins": [
+        "https://wiki.biligame.com"
+      ],
+      "map": "bwiki:ys:Data:Map4",
+      "generation": "Data:Map4:revision689825",
+      "accountTier": "browser-local",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "cff6390377fdb63b2e99b3546455e2f2889ced9bc3ba70974d58b9e7eaeba763",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point2.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point3.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point4.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point5.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point6.json"
+        }
+      ],
+      "statePaths": [
+        "onchoose",
+        "indexedDB.wikiYSMap4Data.pointsOnchoose"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "catalog-incomplete-and-acceptance-pending"
+    },
+    {
+      "id": "map4-localstorage-fallback",
+      "origins": [
+        "https://wiki.biligame.com"
+      ],
+      "map": "bwiki:ys:Data:Map4",
+      "generation": "Data:Map4:revision689825",
+      "accountTier": "browser-local",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "cff6390377fdb63b2e99b3546455e2f2889ced9bc3ba70974d58b9e7eaeba763",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point2.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point3.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point4.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point5.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://wiki.biligame.com",
+          "path": "/ys/Data:Map4/point6.json"
+        }
+      ],
+      "statePaths": [
+        "onchoose",
+        "localStorage.wikiMap_ys_Data:Map4_Data"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "fallback-save-acceptance-pending"
+    }
+  ],
+  "reasonCode": "catalog-incomplete-and-acceptance-pending"
+}
