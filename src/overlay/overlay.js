@@ -242,6 +242,10 @@ function draw() {
   drawnCount = 0;
   if (!data || !view || visibility <= 0) {
     updateHover();
+    if (pad.pick >= 0) {
+      pad.pick = -1;
+      renderPadPick();
+    }
     return;
   }
 
@@ -314,6 +318,35 @@ function draw() {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  if (pad.hint) drawPadAim(half, u);
+}
+
+// Controller: Fadenkreuz in der Bildmitte, Ring um den gewählten Marker
+function drawPadAim(half, u) {
+  const slot = padPickSlot();
+  const pick = slot >= 0 ? drawnIndex[slot] : -1;
+  if (pick !== pad.pick) {
+    pad.pick = pick;
+    renderPadPick();
+  }
+  const cx = innerWidth / 2;
+  const cy = innerHeight / 2;
+  ctx.globalAlpha = visibility;
+  ctx.strokeStyle = '#ffe6b2';
+  ctx.lineWidth = 2 * u;
+  ctx.beginPath();
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    ctx.moveTo(cx + dx * 5 * u, cy + dy * 5 * u);
+    ctx.lineTo(cx + dx * 13 * u, cy + dy * 13 * u);
+  }
+  ctx.stroke();
+  if (slot >= 0) {
+    ctx.lineWidth = 3 * u;
+    ctx.beginPath();
+    ctx.arc(drawnX[slot], drawnY[slot], half + 4 * u, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawCheck(x, y, r) {
@@ -427,6 +460,188 @@ function toggleFoundMarker(index) {
   setFound(id, !found.has(id));
   api.toggleFound(id);
 }
+
+// ---------- Controller ----------
+
+// Gamepad-API: Xbox, PlayStation, Switch usw., egal ob USB oder Bluetooth
+// - Fenster nie fokussiert und bei „Overlay aus“ versteckt → Timer statt requestAnimationFrame
+// - Genshin liest denselben Controller → nur Kombis: erste Taste halten, zweite drücken
+const PAD_BUTTONS = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, View: 8, Menu: 9, LS: 10, RS: 11, Up: 12, Down: 13, Left: 14, Right: 15 };
+const PAD_LOCAL = ['openSpot', 'markFound'];
+const PAD_POLL_MS = 16;
+const PAD_HINT_MS = 150;
+// Fangradius um die Bildmitte, bei 1080p
+const PAD_PICK_PX = 80;
+const DPAD_LABELS = { Up: '↑', Down: '↓', Left: '←', Right: '→' };
+const PS_LABELS = { A: '✕', B: '○', X: '□', Y: '△', LB: 'L1', RB: 'R1', LT: 'L2', RT: 'R2', LS: 'L3', RS: 'R3', Menu: 'Options', ...DPAD_LABELS };
+const PAD_LABELS = {
+  xbox: DPAD_LABELS,
+  ps4: { ...PS_LABELS, View: 'Share' },
+  ps5: { ...PS_LABELS, View: 'Create' },
+  // Standard-Belegung nach Position: unten = B bei Nintendo
+  nintendo: { A: 'B', B: 'A', X: 'Y', Y: 'X', LB: 'L', RB: 'R', LT: 'ZL', RT: 'ZR', View: '−', Menu: '+', ...DPAD_LABELS },
+};
+
+const pad = { timer: null, held: new Set(), consumed: new Set(), combos: [], family: 'xbox', seen: new Set(), modifier: -1, since: 0, hint: false, pick: -1 };
+
+function padFamily(id) {
+  if (/Vendor: 054c/i.test(id)) return /Product: (0ce6|0df2)/i.test(id) ? 'ps5' : 'ps4';
+  if (/Vendor: 057e/i.test(id)) return 'nintendo';
+  return 'xbox';
+}
+
+const padLabel = (name) => PAD_LABELS[pad.family][name] || name;
+const comboLabel = (combo) => combo.names.map(padLabel).join(' + ');
+
+// Ungültige Einträge fallen still weg. Längere Kombis zuerst: „View+A“ schlägt „A“
+function padCombos() {
+  const combos = [];
+  for (const [action, text] of Object.entries(settings.gamepad || {})) {
+    const names = String(text || '').split('+').map((s) => s.trim()).filter(Boolean);
+    if (!names.length || !names.every((n) => Object.hasOwn(PAD_BUTTONS, n))) continue;
+    combos.push({ action, names, keys: names.map((n) => PAD_BUTTONS[n]) });
+  }
+  return combos.sort((a, b) => b.keys.length - a.keys.length);
+}
+
+function applyPadSettings() {
+  pad.combos = padCombos();
+  if (!pad.combos.length) stopPad();
+  else if ([...navigator.getGamepads()].some(Boolean)) startPad();
+  updatePadHint();
+}
+
+function startPad() {
+  if (pad.timer || !pad.combos.length) return;
+  pad.timer = setInterval(pollPad, PAD_POLL_MS);
+}
+
+function stopPad() {
+  clearInterval(pad.timer);
+  pad.timer = null;
+  pad.held = new Set();
+  pad.consumed.clear();
+  updatePadHint();
+}
+
+function pollPad() {
+  const pads = [...navigator.getGamepads()].filter(Boolean);
+  if (!pads.length) {
+    stopPad();
+    return;
+  }
+  const held = new Set();
+  for (const p of pads) {
+    p.buttons.forEach((b, i) => {
+      // Trigger sind analog: erst ab halbem Weg
+      if (i === 6 || i === 7 ? b.value > 0.5 : b.pressed) held.add(i);
+    });
+  }
+  const before = pad.held;
+  pad.held = held;
+  for (const k of pad.consumed) if (!held.has(k)) pad.consumed.delete(k);
+  for (const combo of pad.combos) {
+    const last = combo.keys[combo.keys.length - 1];
+    if (before.has(last) || pad.consumed.has(last) || !combo.keys.every((k) => held.has(k))) continue;
+    pad.consumed.add(last);
+    runPadAction(combo.action);
+  }
+  updatePadHint();
+}
+
+// Erste Taste einer Kombi kurz gehalten → Belegung und Auswahl zeigen
+function updatePadHint() {
+  const held = pad.combos.find((c) => c.keys.length > 1 && pad.held.has(c.keys[0]));
+  const modifier = held ? held.keys[0] : -1;
+  if (modifier !== pad.modifier) {
+    pad.modifier = modifier;
+    pad.since = performance.now();
+  }
+  const show = modifier >= 0 && settings.active && performance.now() - pad.since >= PAD_HINT_MS;
+  if (show === pad.hint) return;
+  pad.hint = show;
+  pad.pick = -1;
+  renderPadHint();
+  requestDraw();
+}
+
+function renderPadHint() {
+  const el = $('pad-hint');
+  el.hidden = !pad.hint;
+  if (!pad.hint) return;
+  const list = $('pad-hint-keys');
+  list.textContent = '';
+  for (const combo of pad.combos) {
+    if (combo.keys.length < 2 || combo.keys[0] !== pad.modifier) continue;
+    const row = document.createElement('span');
+    const key = document.createElement('kbd');
+    key.textContent = comboLabel(combo);
+    row.append(key, ` ${tt(`pad.${combo.action}`)}`);
+    list.append(row);
+  }
+  renderPadPick();
+}
+
+function renderPadPick() {
+  const name = pad.pick >= 0 && data ? data.types[data.markers.type[pad.pick]].name : '';
+  $('pad-hint-pick').textContent = name;
+  $('pad-hint-pick').hidden = !name;
+}
+
+// Platz in drawn* des Markers am nächsten zur Bildmitte (Symbolmitte), aus dem letzten Bild
+function padPickSlot() {
+  const r = PAD_PICK_PX * uiScale();
+  const cx = innerWidth / 2;
+  const cy = innerHeight / 2;
+  let best = -1;
+  let bestDist = r * r;
+  for (let k = 0; k < drawnCount; k++) {
+    const dx = drawnX[k] - cx;
+    const dy = drawnY[k] - cy;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) {
+      bestDist = d;
+      best = k;
+    }
+  }
+  return best;
+}
+
+function runPadAction(action) {
+  if (!PAD_LOCAL.includes(action)) {
+    api.action(action);
+    return;
+  }
+  if (!settings.active) return;
+  if (!data || !target) {
+    showToast(tt('pad.noMap'));
+    return;
+  }
+  const slot = padPickSlot();
+  const pick = slot >= 0 ? drawnIndex[slot] : -1;
+  if (action === 'openSpot') {
+    if (spot && (pick < 0 || pick === spot.index)) closeSpot();
+    else if (pick >= 0) openSpot(pick);
+    else showToast(tt('pad.noMarker'));
+  } else {
+    const index = pick >= 0 ? pick : spot ? spot.index : -1;
+    if (index >= 0) toggleFoundMarker(index);
+    else showToast(tt('pad.noMarker'));
+  }
+}
+
+window.addEventListener('gamepadconnected', (event) => {
+  const { id } = event.gamepad;
+  pad.family = padFamily(id);
+  if (!pad.seen.has(id)) {
+    pad.seen.add(id);
+    api.gamepad(id);
+    const first = pad.combos.find((c) => c.keys.length > 1);
+    if (first) showToast(tt('pad.connected', { key: padLabel(first.names[0]) }));
+  }
+  renderSettings();
+  startPad();
+});
 
 // ---------- Gefunden ----------
 
@@ -819,6 +1034,9 @@ function renderSettings() {
   const errors = settings.hotkeyErrors || [];
   $('keys').textContent = errors.length ? `${keys} – ${tt('ui.keysUnavailable', { keys: errors.join(', ') })}` : keys;
   $('keys').classList.toggle('error', errors.length > 0);
+  // Controller-Zeile erst, wenn einer benutzt wurde
+  const combos = pad.seen.size ? pad.combos.map((c) => `${comboLabel(c)} ${tt(`pad.${c.action}`)}`) : [];
+  $('pad-keys').textContent = combos.length ? tt('ui.padKeys', { keys: combos.join(' · ') }) : '';
 }
 
 function renderDataInfo() {
@@ -896,6 +1114,7 @@ api.on('settings', (next) => {
     enabled = new Set(settings.enabledTypes.map((k) => typeIndexByKey.get(k)).filter((t) => t !== undefined));
     updateCategoryHeads();
   }
+  applyPadSettings();
   renderSettings();
   requestDraw();
 });

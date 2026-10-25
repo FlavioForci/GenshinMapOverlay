@@ -48,6 +48,7 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
    brauchen die F-Tasten eventuell **fn**.
 
 „Genshin randlos starten“ und der Tasten-Helfer gibt es nur unter Windows, auf dem Mac braucht man sie nicht.
+Die Controller-Steuerung ist auf dem Mac noch nicht getestet.
 
 ## Bedienung
 
@@ -67,6 +68,26 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 - Außerhalb der Karte hält das Spiel die Maus fest. Dort **Alt** gedrückt halten, um im Panel zu klicken.
 
 Gefundene Marker werden nur auf deinem PC gespeichert (`%APPDATA%\Genshin Map Overlay\found.json`).
+
+### Controller
+
+Xbox, PlayStation (DualShock 4, DualSense), Switch Pro und die meisten anderen Controller gehen, über
+USB oder Bluetooth. Genshin liest denselben Controller, deshalb reagiert das Overlay nur auf
+Kombinationen: **View** (PlayStation: **Create**/**Share**) halten und eine zweite Taste drücken.
+Solange du sie hältst, steht die Belegung unten am Bildschirm, und ein Fadenkreuz markiert die Mitte.
+Der Marker, der ihr am nächsten liegt, ist ausgewählt. Verschieb die Karte also mit dem Stick, bis dein
+Marker in der Mitte sitzt.
+
+| Xbox | PlayStation | Funktion |
+|---|---|---|
+| **View + Menu** | **Create + Options** | Overlay ein/aus |
+| **View + Y** | **Create + △** | Marker-Panel auf/zu |
+| **View + X** | **Create + □** | Gefundene Marker ein-/ausblenden |
+| **View + A** | **Create + ✕** | Fundort-Karte des ausgewählten Markers auf/zu |
+| **View + B** | **Create + ○** | Ausgewählten Marker als gefunden markieren (oder wieder offen) |
+
+Das Overlay liest den Controller nur mit und schickt nichts ans Spiel. Die Tasten lassen sich in der
+Einstellungsdatei ändern (`gamepad`), abschalten geht im Tray-Menü unter **Erweitert**.
 
 ## Ist das sicher für meinen Account?
 
@@ -101,6 +122,7 @@ Tray-Menü → **Erweitert** → **Einstellungsdatei öffnen**, danach **Einstel
 | Schlüssel | Bedeutung |
 |---|---|
 | `hotkeys` | Tasten, z. B. `"F7"`, `"Alt+M"`, `"Ctrl+Shift+F1"` |
+| `gamepad` | Controller-Kombinationen, z. B. `"View+A"`. Tasten nach Xbox-Position: `A` `B` `X` `Y` `LB` `RB` `LT` `RT` `View` `Menu` `LS` `RS` `Up` `Down` `Left` `Right` (`A` = untere Taste, bei PlayStation ✕) |
 | `markerSize` | Markergröße in Pixeln bei 1080p (auch im Panel) |
 | `language` | `"de"` oder `"en"`; leer = aus dem Setup bzw. von Windows |
 | `showInCaptures` | `true` = Overlay ist in Screenshots, Aufnahmen und Streams zu sehen (auch im Panel) |

@@ -11,6 +11,17 @@ const DEFAULTS = {
     cycleOpacity: 'F10',
   },
   hotkeysEnabled: true,
+  // Controller-Kombis, Tasten nach Xbox-Position (A = unten, bei PlayStation ✕)
+  // - erste Taste halten, dann die zweite drücken
+  gamepad: {
+    toggleOverlay: 'View+Menu',
+    togglePanel: 'View+Y',
+    toggleFound: 'View+X',
+    cycleOpacity: '',
+    openSpot: 'View+A',
+    markFound: 'View+B',
+  },
+  gamepadEnabled: true,
   active: true,
   // null = Setup bzw. Windows-Sprache
   language: null,
@@ -43,7 +54,12 @@ function clamp(value, min, max, fallback) {
 }
 
 function normalize(raw) {
-  const cfg = { ...DEFAULTS, ...raw, hotkeys: { ...DEFAULTS.hotkeys, ...(raw && raw.hotkeys) } };
+  const cfg = {
+    ...DEFAULTS,
+    ...raw,
+    hotkeys: { ...DEFAULTS.hotkeys, ...(raw && raw.hotkeys) },
+    gamepad: { ...DEFAULTS.gamepad, ...(raw && raw.gamepad) },
+  };
   cfg.opacity = clamp(cfg.opacity, 0.2, 1, DEFAULTS.opacity);
   if (!Array.isArray(cfg.opacitySteps) || !cfg.opacitySteps.length) cfg.opacitySteps = DEFAULTS.opacitySteps;
   cfg.opacitySteps = cfg.opacitySteps.map((v) => clamp(v, 0.2, 1, 1));
@@ -72,9 +88,9 @@ function load() {
 function save(cfg) {
   const out = {};
   for (const [key, value] of Object.entries(cfg)) {
-    if (key === 'hotkeys') {
-      const changed = Object.entries(value).filter(([name, accelerator]) => DEFAULTS.hotkeys[name] !== accelerator);
-      if (changed.length) out.hotkeys = Object.fromEntries(changed);
+    if (key === 'hotkeys' || key === 'gamepad') {
+      const changed = Object.entries(value).filter(([name, keys]) => DEFAULTS[key][name] !== keys);
+      if (changed.length) out[key] = Object.fromEntries(changed);
     } else if (JSON.stringify(value) !== JSON.stringify(DEFAULTS[key])) {
       out[key] = value;
     }

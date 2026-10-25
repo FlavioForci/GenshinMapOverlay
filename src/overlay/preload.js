@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('overlayApi', {
   toggleFound: (id) => ipcRenderer.send('overlay:found-toggle', id),
   refreshData: () => ipcRenderer.send('overlay:refresh-data'),
   hide: () => ipcRenderer.send('overlay:hide'),
+  action: (name) => ipcRenderer.send('overlay:action', name),
+  gamepad: (id) => ipcRenderer.send('overlay:gamepad', id),
   icon: (type) => ipcRenderer.invoke('overlay:icon', type),
   comments: (type, id, page) => ipcRenderer.invoke('overlay:comments', type, id, page),
   commentImage: (imagePath) => ipcRenderer.invoke('overlay:comment-image', imagePath),

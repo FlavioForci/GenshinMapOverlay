@@ -48,6 +48,7 @@
       'tray.refreshData': 'Markerdaten aktualisieren',
       'tray.rebuild': 'Kartenerkennung neu aufbauen',
       'tray.hotkeysEnabled': 'Hotkeys aktiv',
+      'tray.gamepadEnabled': 'Controller aktiv',
       'tray.helperStart': 'Tasten im Spiel aktivieren (Admin-Helfer)',
       'tray.autostart': 'Mit Windows starten',
       'tray.advanced': 'Erweitert',
@@ -108,6 +109,17 @@
       'ui.key.toggleFound': 'Gefundene',
       'ui.key.cycleOpacity': 'Deckkraft',
       'ui.keysUnavailable': 'nicht verfügbar: {keys}',
+      'ui.padKeys': 'Controller: {keys}',
+
+      'pad.connected': 'Controller erkannt – {key} halten zeigt die Belegung',
+      'pad.noMap': 'Erst die Karte im Spiel öffnen',
+      'pad.noMarker': 'Kein Marker in der Mitte – Karte mit dem Stick verschieben',
+      'pad.toggleOverlay': 'Overlay ein/aus',
+      'pad.togglePanel': 'Panel',
+      'pad.toggleFound': 'Gefundene ein/aus',
+      'pad.cycleOpacity': 'Deckkraft',
+      'pad.openSpot': 'Fotos',
+      'pad.markFound': 'Abhaken',
     },
 
     en: {
@@ -149,6 +161,7 @@
       'tray.refreshData': 'Update marker data',
       'tray.rebuild': 'Rebuild map recognition',
       'tray.hotkeysEnabled': 'Hotkeys enabled',
+      'tray.gamepadEnabled': 'Controller enabled',
       'tray.helperStart': 'Enable hotkeys in game (admin helper)',
       'tray.autostart': 'Start with Windows',
       'tray.advanced': 'Advanced',
@@ -209,6 +222,17 @@
       'ui.key.toggleFound': 'Found',
       'ui.key.cycleOpacity': 'Opacity',
       'ui.keysUnavailable': 'unavailable: {keys}',
+      'ui.padKeys': 'Controller: {keys}',
+
+      'pad.connected': 'Controller detected – hold {key} to see the buttons',
+      'pad.noMap': 'Open the map in game first',
+      'pad.noMarker': 'No marker in the middle – move the map with the stick',
+      'pad.toggleOverlay': 'Overlay on/off',
+      'pad.togglePanel': 'Panel',
+      'pad.toggleFound': 'Show/hide found',
+      'pad.cycleOpacity': 'Opacity',
+      'pad.openSpot': 'Photos',
+      'pad.markFound': 'Mark found',
     },
   };
 

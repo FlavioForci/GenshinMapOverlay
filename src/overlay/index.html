@@ -22,6 +22,12 @@
 
   <div id="toast" class="toast" hidden></div>
 
+  <!-- Controller: Belegung, solange die Halte-Taste gedrückt ist -->
+  <div id="pad-hint" class="pad-hint" hidden>
+    <strong id="pad-hint-pick" hidden></strong>
+    <div id="pad-hint-keys" class="pad-hint-keys"></div>
+  </div>
+
   <button id="panel-handle" class="panel-handle" type="button" hidden data-i18n-title="ui.handleTitle" data-i18n-aria="ui.handleTitle">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
     <span data-i18n="ui.handle"></span>
@@ -97,6 +103,7 @@
         <button id="refresh" class="link-btn" type="button" data-i18n="ui.refresh"></button>
       </div>
       <div id="keys" class="keys"></div>
+      <div id="pad-keys" class="keys"></div>
     </footer>
   </aside>
 

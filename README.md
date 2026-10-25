@@ -17,6 +17,7 @@ Deutsche Anleitung: [README.de.md](README.de.md)
 - Right-click marks a marker as found. Hide found ones with one key and see your progress per type.
 - 690+ marker types in categories, with search.
 - Hotkeys that work in game, English and German, scales with your resolution up to 4K.
+- Controller support (Xbox, PlayStation, Switch Pro and others).
 
 ## Installation
 
@@ -54,7 +55,8 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 4. The overlay lives in the menu bar (compass icon), there is no Dock icon. On Mac keyboards the
    F keys may need **fn**.
 
-"Start Genshin borderless" and the hotkey helper are Windows-only and not needed on a Mac.
+"Start Genshin borderless" and the hotkey helper are Windows-only and not needed on a Mac. Controller
+support hasn't been tested on a Mac yet.
 
 ## How to use it
 
@@ -74,6 +76,25 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 - Outside the map the game locks the mouse. Hold **Alt** to click in the panel there.
 
 Found markers are saved only on your PC (`%APPDATA%\Genshin Map Overlay\found.json`).
+
+### Controller
+
+Xbox, PlayStation (DualShock 4, DualSense), Switch Pro and most other controllers work, over USB or
+Bluetooth. Genshin reads the same controller, so the overlay only reacts to combinations: hold
+**View** (PlayStation: **Create**/**Share**) and press a second button. While you hold it, the buttons
+show at the bottom of the screen and a crosshair marks the middle. The marker closest to it is the
+selected one, so move the map with the stick until your marker sits in the middle.
+
+| Xbox | PlayStation | What it does |
+|---|---|---|
+| **View + Menu** | **Create + Options** | Overlay on/off |
+| **View + Y** | **Create + △** | Open/close the marker panel |
+| **View + X** | **Create + □** | Show/hide found markers |
+| **View + A** | **Create + ✕** | Open/close the spot card of the selected marker |
+| **View + B** | **Create + ○** | Mark the selected marker as found (or not found again) |
+
+The overlay only reads the controller, it sends nothing to the game. You can change the buttons in the
+settings file (`gamepad`) or turn the controller off in the tray menu under **Advanced**.
 
 ## Is it safe for my account?
 
@@ -108,6 +129,7 @@ Tray menu → **Advanced** → **Open settings file**, then **Reload settings**.
 | Key | Meaning |
 |---|---|
 | `hotkeys` | Keys, e.g. `"F7"`, `"Alt+M"`, `"Ctrl+Shift+F1"` |
+| `gamepad` | Controller combinations, e.g. `"View+A"`. Buttons by Xbox position: `A` `B` `X` `Y` `LB` `RB` `LT` `RT` `View` `Menu` `LS` `RS` `Up` `Down` `Left` `Right` (`A` = bottom button, ✕ on PlayStation) |
 | `markerSize` | Marker size in pixels at 1080p (also in the panel) |
 | `language` | `"en"` or `"de"`; empty = from the setup or Windows |
 | `showInCaptures` | `true` = overlay shows up in screenshots, recordings and streams (also in the panel) |

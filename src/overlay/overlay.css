@@ -65,7 +65,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .tooltip strong { font-weight: 700; }
 .tooltip span { color: var(--slate-soft); font-size: calc(12 * var(--u)); }
-.tooltip[hidden], .hud[hidden], .toast[hidden], .lightbox[hidden] { display: none; }
+.tooltip[hidden], .hud[hidden], .toast[hidden], .lightbox[hidden], .pad-hint[hidden], .pad-hint [hidden] { display: none; }
 
 .hud, .toast {
   position: fixed;
@@ -93,6 +93,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hud { display: flex; align-items: center; gap: calc(12 * var(--u)); }
 .hud-bar { width: calc(120 * var(--u)); height: calc(4 * var(--u)); border-radius: calc(2 * var(--u)); background: rgba(255, 255, 255, 0.15); overflow: hidden; }
 .hud-bar span { display: block; height: 100%; width: 0; background: var(--gold); transition: width 0.3s; }
+
+/* Controller-Belegung unten mittig, dort hat die Ingame-Karte keine Knöpfe */
+.pad-hint {
+  position: fixed;
+  bottom: calc(40 * var(--u));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  padding: calc(10 * var(--u)) calc(60 * var(--u));
+  background: linear-gradient(90deg, transparent, rgba(26, 30, 40, 0.88) 15%, rgba(26, 30, 40, 0.88) 85%, transparent);
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pad-hint strong { color: var(--gold); font-weight: 700; }
+.pad-hint-keys { display: flex; gap: calc(16 * var(--u)); }
+.pad-hint kbd { border-color: var(--gold-line); color: var(--cream); }
 
 .panel-handle {
   position: fixed;

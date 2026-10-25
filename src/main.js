@@ -18,6 +18,9 @@ const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
 
+// Controller: XInput/HID statt GameInput, das Overlay hat nie den Fokus
+if (IS_WIN) app.commandLine.appendSwitch('disable-features', 'EnableWindowsGameInputDataFetcher');
+
 let cfg;
 let lang = 'en';
 let store;
@@ -313,6 +316,7 @@ function publicSettings() {
     language: lang,
     hotkeys: cfg.hotkeysEnabled ? cfg.hotkeys : {},
     hotkeyErrors: state.hotkeyErrors.map((name) => cfg.hotkeys[name]),
+    gamepad: cfg.gamepadEnabled ? cfg.gamepad : {},
     enabledTypes: cfg.enabledTypes,
     hideFound: cfg.hideFound,
     showInCaptures: cfg.showInCaptures,
@@ -621,6 +625,12 @@ function updateTrayMenu() {
             registerHotkeys();
           },
         },
+        {
+          label: tr('tray.gamepadEnabled'),
+          type: 'checkbox',
+          checked: cfg.gamepadEnabled,
+          click: (item) => updateSettings({ gamepadEnabled: item.checked }),
+        },
         { type: 'separator' },
         { label: tr('tray.openSettings'), click: () => shell.openPath(config.filePath()) },
         { label: tr('tray.reloadSettings'), click: reloadSettings },
@@ -681,6 +691,16 @@ ipcMain.on('overlay:refresh-data', (event) => {
 
 ipcMain.on('overlay:hide', (event) => {
   if (fromOverlay(event)) setActive(false);
+});
+
+// Controller-Kombis für dieselben Aktionen wie die Hotkeys
+ipcMain.on('overlay:action', (event, name) => {
+  if (!fromOverlay(event) || !Object.hasOwn(HOTKEY_ACTIONS, name)) return;
+  HOTKEY_ACTIONS[name]();
+});
+
+ipcMain.on('overlay:gamepad', (event, id) => {
+  if (fromOverlay(event)) log(`controller: ${String(id).slice(0, 120)}`);
 });
 
 ipcMain.handle('overlay:icon', async (event, type) => {
