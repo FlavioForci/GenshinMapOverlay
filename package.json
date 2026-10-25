@@ -16,7 +16,8 @@
     "server:deploy": "wrangler pages deploy public --cwd server",
     "data:import-icons": "node server/tools/import-icons.js",
     "data:import-photos": "node server/tools/import-photos.js",
-    "dist:mac": "electron-builder --mac --arm64 --publish never"
+    "dist:mac": "electron-builder --mac --arm64 --publish never",
+    "test:progress": "node --test \"tests/progress/*.test.js\""
   },
   "build": {
     "appId": "local.genshin-map-overlay",
@@ -76,5 +77,8 @@
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
