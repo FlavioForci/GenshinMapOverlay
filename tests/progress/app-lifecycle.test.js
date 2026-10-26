@@ -28,7 +28,7 @@ async function mainHarness(t, { deferRuntime = false } = {}) {
   const runtime={service,shutdown:async()=>{if(failDrain)throw Error('disk');},retryLocal:async()=>service.snapshot()};
   const filename=path.resolve(__dirname,'../../src/main.js');const nativeRequire=require('node:module').createRequire(filename);
   const mocks={electron,'./config':config,'./hotkey-helper':{isHelperProcess:()=>false,HotkeyBridge:class {setHotkeys(){}}},'./data/store':{DataStore:class{async loadMarkers(){return null;}}},'./progress/runtime':{createProgressRuntime:async options=>{published.push(options.onSnapshot);await initializationGate;return runtime;}}};
-  const context={require:name=>Object.hasOwn(mocks,name)?mocks[name]:nativeRequire(name),module:{exports:{}},__dirname:path.dirname(filename),process:{platform:'linux',versions:{electron:'test'},execPath:'/tmp/test-electron'},setTimeout:fn=>{timeouts.push(fn);return timeouts.length;},clearTimeout:()=>cleared++,setInterval:()=>123,clearInterval:()=>cleared++,console};
+  const context={require:name=>Object.hasOwn(mocks,name)?mocks[name]:nativeRequire(name),module:{exports:{}},__dirname:path.dirname(filename),process:{platform:'linux',env:{},argv:[],versions:{electron:'test'},execPath:'/tmp/test-electron'},setTimeout:fn=>{timeouts.push(fn);return timeouts.length;},clearTimeout:()=>cleared++,setInterval:()=>123,clearInterval:()=>cleared++,console};
   vm.runInNewContext(fs.readFileSync(filename,'utf8')+'\nmodule.exports={start,updateSettings,reloadSettings,toggleFoundVisibility,setLanguage,openProfileSettings};',context,{filename});
   const startup=context.module.exports.start();
   if(!deferRuntime)await startup;

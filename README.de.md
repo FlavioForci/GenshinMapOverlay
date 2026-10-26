@@ -49,6 +49,44 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 
 „Genshin randlos starten“ und der Tasten-Helfer gibt es nur unter Windows, auf dem Mac braucht man sie nicht.
 
+### Linux (x64, Beta)
+
+Es gibt eine Linux-Version als AppImage und `.deb`. Sie ist neu und mit dem Spiel kaum getestet, bitte
+melde Auffälligkeiten im [Discord](https://discord.gg/TaKd4BU8f). Genshin läuft unter Linux nur über
+Wine oder Proton. Das unterstützt HoYoverse nicht offiziell, unabhängig vom Overlay.
+
+1. `GenshinMapOverlay-<Version>-linux-x86_64.AppImage` unter
+   [Releases](https://github.com/FlavioForci/GenshinMapOverlay/releases/latest) laden, ausführbar
+   machen (`chmod +x GenshinMapOverlay-*.AppImage`) und starten. AppImages brauchen FUSE 2: unter
+   Ubuntu 22.04 `sudo apt install libfuse2`, unter Ubuntu 24.04 `sudo apt install libfuse2t64`.
+   Unter Debian/Ubuntu geht stattdessen auch `GenshinMapOverlay-<Version>-linux-amd64.deb`
+   (`sudo apt install ./GenshinMapOverlay-*-linux-amd64.deb`), gestartet wird dann übers App-Menü.
+2. Das Overlay sitzt im Infobereich. Unter GNOME braucht das die Erweiterung **AppIndicator and
+   KStatusNotifierItem Support** (bei Ubuntu schon dabei). Ohne Infobereich gehen die Tasten und der
+   Reiter **Marker** an der Karte trotzdem. Beenden mit `pkill -f genshin-map-overlay`.
+3. Genshin in den Grafikeinstellungen auf Fenster oder randlos stellen und die Karte mit **M** öffnen.
+
+Voraussetzungen: Linux x64 mit X11 oder ein Wayland-Desktop mit XWayland (GNOME, KDE Plasma und die
+meisten anderen), dazu ein Compositor für das durchsichtige Fenster.
+
+Einschränkungen unter Linux:
+
+- **Wayland:** Das Overlay startet sich selbst unter XWayland (X11) neu, weil natives Wayland Apps
+  kein durchklickbares Fenster immer oben und keine globalen Tasten erlaubt. Die Bildschirmaufnahme
+  läuft über den Systemdialog (PipeWire): den Bildschirm mit dem Spiel wählen. Der Dialog kommt bei
+  jedem Start des Overlays wieder. Natives Wayland erzwingt `--ozone-platform=wayland`, dann gehen
+  Position, Klicks und Tasten aber meist nicht.
+- **Tasten** gehen, solange das Spielfenster den Fokus hat. Hält das Spiel im Vollbild die Tastatur
+  fest, das Tray-Menü oder den Reiter an der Karte nehmen.
+- **Screenshots:** Linux kann Fenster nicht aus Bildschirmaufnahmen ausblenden. Das Overlay ist in
+  Screenshots und Streams zu sehen, der Schalter **In Screenshots sichtbar** fehlt im Panel. Die
+  Kartenerkennung sieht die Marker mit, das kann sie etwas unruhiger machen.
+- **Genshin randlos starten** und der Tasten-Helfer gibt es nur unter Windows.
+- Noch nicht getestet: mehrere Monitore, Gamescope, Wines virtueller Desktop, Tippen in der Panel-Suche.
+
+Einstellungen, Cache, Log und gefundene Marker liegen in `~/.config/Genshin Map Overlay`. Tray-Menü →
+**Beim Anmelden starten** trägt das Overlay in `~/.config/autostart` ein.
+
 ## Bedienung
 
 | Taste | Funktion |

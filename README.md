@@ -56,6 +56,44 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 
 "Start Genshin borderless" and the hotkey helper are Windows-only and not needed on a Mac.
 
+### Linux (x64, beta)
+
+There is a Linux version as AppImage and `.deb`. It is new and has hardly been tested with the game
+yet, so please report anything odd on [Discord](https://discord.gg/TaKd4BU8f). Genshin runs on Linux
+only through Wine or Proton. HoYoverse doesn't support that officially, regardless of the overlay.
+
+1. Download `GenshinMapOverlay-<version>-linux-x86_64.AppImage` from
+   [Releases](https://github.com/FlavioForci/GenshinMapOverlay/releases/latest), make it executable
+   (`chmod +x GenshinMapOverlay-*.AppImage`) and start it. AppImages need FUSE 2: on Ubuntu 22.04
+   `sudo apt install libfuse2`, on Ubuntu 24.04 `sudo apt install libfuse2t64`.
+   On Debian/Ubuntu you can install `GenshinMapOverlay-<version>-linux-amd64.deb` instead
+   (`sudo apt install ./GenshinMapOverlay-*-linux-amd64.deb`) and start it from the app menu.
+2. The overlay sits in the system tray. On GNOME this needs the extension **AppIndicator and
+   KStatusNotifierItem Support** (Ubuntu has it built in). Without a tray, the hotkeys and the
+   **Markers** tab on the map still work. Quit with `pkill -f genshin-map-overlay`.
+3. Put Genshin in window or borderless mode in its graphics settings and open the map with **M**.
+
+Requirements: x64 Linux with X11, or a Wayland desktop with XWayland (GNOME, KDE Plasma and most
+others), and a compositor for the see-through window.
+
+Limits on Linux:
+
+- **Wayland:** the overlay restarts itself on XWayland (X11), because native Wayland doesn't let apps
+  place an always-on-top, click-through window or catch hotkeys. Screen capture goes through the
+  system dialog (PipeWire): pick the screen with the game. The dialog comes back each time the overlay
+  starts. Force native Wayland with `--ozone-platform=wayland`, but expect position, clicks and
+  hotkeys to break.
+- **Hotkeys** work while the game window has focus. If the game grabs the keyboard in fullscreen, use
+  the tray menu or the tab on the map.
+- **Screenshots:** Linux can't hide a window from screen captures. The overlay shows up in
+  screenshots and streams, and the **Visible in screenshots** switch is missing in the panel. The map
+  recognition sees the markers too, which may make it a little less steady.
+- **Start Genshin borderless** and the hotkey helper are Windows-only.
+- Not tested yet: several monitors, Gamescope, Wine's virtual desktop, typing in the panel search.
+
+Settings, cache, log and found markers are in `~/.config/Genshin Map Overlay`. Tray menu →
+**Start on login** adds the overlay to `~/.config/autostart`.
+
 ## How to use it
 
 | Key | What it does |
@@ -185,6 +223,9 @@ The [transfer guide](docs/map-transfers.md#package-verification-for-maintainers)
 extract a packaged ASAR and run `npm run check:transfer-package -- EXTRACTED_APP_DIRECTORY`.
 The checker verifies bundled files and deterministic scripts; live provider/platform acceptance
 is separate.
+
+On Linux, `npm run dist:linux` builds the AppImage and `.deb` instead. The GitHub Actions workflows
+`linux.yml` and `mac.yml` build the other platforms.
 
 | Path | Contents |
 |---|---|

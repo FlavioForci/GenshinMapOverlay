@@ -19,7 +19,7 @@ test('production overlay retains drain ACK/resume after canceled navigation and 
   // Electron messages are simulated. IDs come from the production document.
   const nodes = new Map();
   for (const match of fs.readFileSync(require.resolve('../../src/overlay/index.html'), 'utf8').matchAll(/\bid="([^"]+)"/g)) {
-    nodes.set(match[1], { style: { setProperty() {} }, dataset: {}, classList: { toggle() {}, remove() {} }, addEventListener() {}, removeAttribute() {}, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0 }), getContext: () => ({ setTransform() {} }) });
+    nodes.set(match[1], { closest: () => ({}), style: { setProperty() {} }, dataset: {}, classList: { toggle() {}, remove() {} }, addEventListener() {}, removeAttribute() {}, getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0 }), getContext: () => ({ setTransform() {} }) });
   }
   const window = { overlayApi: api, addEventListener(type, listener, options) { if (options?.once) lifecycle.once(type, listener); else lifecycle.on(type, listener); } };
   const document = { getElementById: id => nodes.get(id), querySelectorAll: () => [], querySelector: () => null, documentElement: {} };

@@ -5,6 +5,7 @@
   "private": true,
   "author": "Genshin Map Overlay",
   "description": "Shows interactive map markers on the Genshin Impact in-game map via image recognition, without touching the game.",
+  "homepage": "https://github.com/FlavioForci/GenshinMapOverlay",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -20,7 +21,8 @@
     "server:deploy": "wrangler pages deploy public --cwd server",
     "data:import-icons": "node server/tools/import-icons.js",
     "data:import-photos": "node server/tools/import-photos.js",
-    "dist:mac": "electron-builder --mac --arm64 --publish never"
+    "dist:mac": "electron-builder --mac --arm64 --publish never",
+    "dist:linux": "electron-builder --linux --x64 --publish never"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -72,6 +74,27 @@
         "LSUIElement": true,
         "NSScreenCaptureUsageDescription": "Genshin Map Overlay looks at the screen to find the in-game map and place the markers. Nothing is saved or sent."
       }
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "executableName": "genshin-map-overlay",
+      "maintainer": "FlavioForci <185372134+FlavioForci@users.noreply.github.com>",
+      "artifactName": "GenshinMapOverlay-${version}-linux-${arch}.${ext}"
     }
   },
   "devDependencies": {
