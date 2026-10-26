@@ -38,6 +38,21 @@ class TransferController {
   }
   /** Main-only lifecycle hook. Trusted routing/catalog changes revoke all pending authority. */
   invalidatePreview() { this.preparation++; this.preview = null; }
+  /** Context-bound renderer projection for local export routing only. The service
+   * validates attachment record/ID/byte bounds; deduplication cannot exceed those
+   * bounds. No observations, provenance, receipts or website capability escape.
+   * @param {import('../progress/service').Context} context
+   * @returns {Promise<Array<{provider:string,map:string}>>}
+   */
+  async readExportScopes(context) {
+    input(context, ['sessionGeneration', 'profileId']);
+    const read = await this.progress.readTransferState(context);
+    const scopes = new Map();
+    for (const row of read.envelope.extensions?.transfer.profiles[context.profileId]?.records || []) {
+      scopes.set(JSON.stringify([row.provider, row.map]), { provider: row.provider, map: row.map });
+    }
+    return [...scopes.values()].sort((a, b) => a.provider.localeCompare(b.provider) || a.map.localeCompare(b.map));
+  }
   /** Main-only report read; no token internals or raw file escape to IPC.
    * @param {import('../progress/service').Context} context @param {string} previewId
    * @returns {Promise<import('./planner').TransferReport>}

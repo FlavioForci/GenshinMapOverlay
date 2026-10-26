@@ -5,7 +5,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const { readFileBounded, atomicWriteFile } = require('../progress/atomic-file');
 const { parseTransfer, serializeTransfer, TRANSFER_LIMITS, TransferValidationError } = require('./envelope');
 const { listProviders, getProvider } = require('./registry');
-const CHANNELS = ['providers', 'previewImport', 'applyImport', 'exportProfile', 'saveScript', 'saveReport'].map(name => 'transfer:' + name);
+const CHANNELS = ['providers', 'exportScopes', 'previewImport', 'applyImport', 'exportProfile', 'saveScript', 'saveReport'].map(name => 'transfer:' + name);
 const CODES = new Set(['invalid-command', 'unauthorized-sender', 'stale-context', 'stale-preview', 'provider-mismatch', 'unknown-provider', 'invalid-transfer', 'transfer-too-large', 'limit-exceeded', 'duplicate-import', 'catalog-unavailable', 'service-closed', 'not-initialized', 'local-operation-failed', 'local-recovery-required', 'local-read-failed', 'local-write-failed', 'local-backup-failed', 'local-durability-uncertain', 'invalid-envelope', 'invalid-state', 'invalid-profile', 'clock-exhausted', 'revision-exhausted', 'unsupported-version']);
 const fail = (code = 'invalid-command') => { throw new ProgressError(code); };
 function record(value, required, optional = []) {
@@ -72,9 +72,21 @@ function registerTransferIpc({ ipcMain, controller, getSettingsWindow, dialogs, 
     return selected.filePath;
   }
   async function write(file, bytes, maximum = TRANSFER_LIMITS.BYTES) { await atomicWriteFile(file, bytes, { maxBytes: maximum }); }
+  async function authorizeExport(event, owner, ctx, provider, map) {
+    gate(event, owner, ctx);
+    if (typeof map !== 'string' || !map.length || map.length > TRANSFER_LIMITS.ID * 2 || Array.from(map).length > TRANSFER_LIMITS.ID) fail();
+    if (provider.variants.some(variant => variant.map === map)) return;
+    const scopes = await controller.readExportScopes(ctx); gate(event, owner, ctx);
+    if (!scopes.some(scope => scope.provider === provider.provider && scope.map === map)) fail();
+  }
   async function dispatch(channel, event, owner, args) {
     switch (channel) {
       case 'transfer:providers': if (args.length) fail(); return listProviders();
+      case 'transfer:exportScopes': {
+        if (args.length !== 1) fail(); const ctx = context(args[0]); current(ctx);
+        const scopes = await controller.readExportScopes(ctx); gate(event, owner, ctx);
+        return ok(scopes);
+      }
       case 'transfer:previewImport': {
         // Trusted new attempts, including cancellation and malformed options, revoke older tokens.
         revoke(); observe(owner);
@@ -107,9 +119,9 @@ function registerTransferIpc({ ipcMain, controller, getSettingsWindow, dialogs, 
       }
       case 'transfer:exportProfile': {
         if (args.length !== 2) fail(); const ctx = context(args[0]); const options = args[1]; record(options, ['provider', 'map']); const provider = getProvider(options.provider);
-        if (!provider.variants.some(variant => variant.map === options.map)) fail(); current(ctx);
+        await authorizeExport(event, owner, ctx, provider, options.map);
         const file = await chooseSave(event, owner, ctx, options.provider + '-progress.json'); if (!file) return ok(null);
-        return boundary(event, owner, ctx, async () => { const exported = await controller.exportProfile(ctx, options); gate(event, owner, ctx); await write(file, Buffer.from(serializeTransfer(exported.envelope))); gate(event, owner, ctx); return ok(exported.report); });
+        return boundary(event, owner, ctx, async () => { await authorizeExport(event, owner, ctx, provider, options.map); const exported = await controller.exportProfile(ctx, options); gate(event, owner, ctx); await write(file, Buffer.from(serializeTransfer(exported.envelope))); gate(event, owner, ctx); return ok(exported.report); });
       }
       case 'transfer:saveScript': {
         if (args.length !== 2) fail(); const [provider, direction] = args; getProvider(provider); if (!['export', 'import'].includes(direction)) fail();

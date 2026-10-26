@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('profileApi', {
 // Fixed transfer intents only. Main chooses/owns every path, file and script.
 contextBridge.exposeInMainWorld('transferApi', {
   providers: () => ipcRenderer.invoke('transfer:providers'),
+  exportScopes: context => ipcRenderer.invoke('transfer:exportScopes', context),
   previewImport: (context, options) => ipcRenderer.invoke('transfer:previewImport', context, options),
   applyImport: (context, options) => ipcRenderer.invoke('transfer:applyImport', context, options),
   exportProfile: (context, options) => ipcRenderer.invoke('transfer:exportProfile', context, options),

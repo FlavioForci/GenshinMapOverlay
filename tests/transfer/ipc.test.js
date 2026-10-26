@@ -162,7 +162,7 @@ test('settings HTML/DOM, sandbox preload, actual IPC/service and native files co
   const mounted = mountSettings({ document, api: exposed.profileApi, transferApi: exposed.transferApi, I18n }); t.after(mounted.dispose);
   f.service.onSnapshot = value => renderer.emit('progress:snapshot', {}, value);
   await mounted.ready; assert.deepEqual(Object.keys(exposed).sort(), ['profileApi', 'transferApi']);
-  assert.deepEqual(Object.keys(exposed.transferApi).sort(), ['applyImport', 'exportProfile', 'previewImport', 'providers', 'saveReport', 'saveScript']);
+  assert.deepEqual(Object.keys(exposed.transferApi).sort(), ['applyImport', 'exportProfile', 'exportScopes', 'previewImport', 'providers', 'saveReport', 'saveScript']);
   renderer.emit('profiles:language', {}, 'de'); $('transfer-name').value = '<synthetic name>';
   await $('transfer-preview').click(); assert.equal($('transfer-mode').value, 'new'); assert.equal($('transfer-apply').disabled, false);
   // The active profile is still empty: its export differs from the one-marker import.
@@ -179,6 +179,58 @@ test('settings HTML/DOM, sandbox preload, actual IPC/service and native files co
 test('disposing transfer routing releases every owner lifecycle listener', async t => {
   const f = await setup(t); await preview(f); assert.ok(f.owner().listenerCount('closed') > 0); f.runtime.dispose();
   assert.equal(f.owner().listenerCount('closed'), 0); assert.equal(f.owner().webContents.listenerCount('destroyed'), 0); assert.equal(f.owner().webContents.listenerCount('did-start-navigation'), 0);
+});
+
+test('settings/preload/IPC import and export retained realms only for the selected profile and provider', async t => {
+  const { mountSettings } = require('../../src/settings/settings'); const I18n = require('../../src/shared/i18n');
+  const { makeSettingsDocument } = require('./settings-harness'); const Module = require('node:module');
+  const f = await setup(t); const original = f.ctx().profileId; const map = 'appsample:gim:7';
+  await fs.writeFile(f.file, JSON.stringify(makeTransfer({ map, records: [{ id: 'realm-marker', map, state: true, category: null, level: null, position: null }] })));
+  const renderer = new EventEmitter(); const reads = [];
+  renderer.invoke = (channel, ...args) => { const result = f.handlers.get(channel)(f.event(), ...args); if (channel === 'transfer:exportScopes') reads.push(result); return result; };
+  const exposed = {}; const filename = require.resolve('../../src/settings/preload'); const preload = new Module(filename, module);
+  preload.require = id => { assert.equal(id, 'electron'); return { ipcRenderer: renderer, contextBridge: { exposeInMainWorld: (key, value) => { exposed[key] = value; } } }; };
+  preload._compile(await fs.readFile(filename, 'utf8'), filename);
+  const document = makeSettingsDocument(); const $ = id => document.getElementById(id); let subscriber;
+  const api = { getState: async () => ({ ok: true, value: f.service.snapshot() }), onSnapshot: fn => { subscriber = fn; return () => {}; }, onLanguage: () => () => {} };
+  const mounted = mountSettings({ document, api, transferApi: exposed.transferApi, I18n }); t.after(mounted.dispose);
+  f.service.onSnapshot = value => subscriber(value);
+  const settleScopes = async () => { await reads.at(-1); await new Promise(resolve => setImmediate(resolve)); };
+  await mounted.ready;
+  assert.equal($('transfer-map').children.some(o => o.value === map), false);
+  await $('transfer-preview').click(); await $('transfer-apply').click(); await settleScopes();
+  const imported = f.ctx().profileId; assert.notEqual(imported, original);
+  assert.ok($('transfer-map').children.some(o => o.value === map));
+  const scopes = await f.call('exportScopes', f.ctx());
+  assert.deepEqual(scopes, { ok: true, value: [{ provider: 'appsample', map }] });
+  assert.doesNotMatch(JSON.stringify(scopes), /realm-marker|mapping|catalog|imports|records/);
+  $('transfer-map').value = map; await $('transfer-export').click();
+  const out = JSON.parse(await fs.readFile(f.output)); assert.equal(out.map, map); assert.deepEqual(out.records.map(r => [r.id, r.state]), [['realm-marker', true]]);
+  const saves = f.saves();
+  for (const options of [{ provider: 'hoyolab', map }, { provider: 'appsample', map: 'appsample:gim:8' }, { provider: 'appsample', map: 'x'.repeat(129) }, { provider: 'appsample', map, path: f.output }]) {
+    assert.equal((await f.call('exportProfile', f.ctx(), options)).error.code, 'invalid-command');
+  }
+  assert.equal(f.saves(), saves);
+  const oldContext = f.ctx(); await f.service.selectProfile({ sessionGeneration: oldContext.sessionGeneration, profileId: original }); await settleScopes();
+  assert.equal($('transfer-map').children.some(o => o.value === map), false);
+  assert.deepEqual(await f.call('exportScopes', f.ctx()), { ok: true, value: [] });
+  assert.equal((await f.call('exportProfile', f.ctx(), { provider: 'appsample', map })).error.code, 'invalid-command'); assert.equal(f.saves(), saves);
+  assert.equal((await f.call('exportScopes', oldContext)).error.code, 'stale-context');
+  const denied = await f.handlers.get('transfer:exportScopes')({ sender: f.owner().webContents, senderFrame: {} }, f.ctx());
+  assert.equal(denied.error.code, 'unauthorized-sender');
+  await f.service.selectProfile({ sessionGeneration: f.ctx().sessionGeneration, profileId: imported }); await settleScopes();
+  assert.ok($('transfer-map').children.some(o => o.value === map));
+  $('transfer-destination').value = 'hoyolab'; await $('transfer-destination').change(); assert.equal($('transfer-map').children.some(o => o.value === map), false);
+  assert.ok((await f.call('providers')).every(p => p.status !== 'supported'));
+});
+
+test('trusted IPC authorizes a retained unsupported realm for local export', async t => {
+  const f = await setup(t); const map = 'appsample:gim:7';
+  await fs.writeFile(f.file, JSON.stringify(makeTransfer({ map, records: [{ id: 'realm-marker', map, state: true, category: null, level: null, position: null }] })));
+  const p = await preview(f); assert.equal((await f.call('applyImport', f.ctx(), { previewId: p.value.id })).ok, true);
+  const exported = await f.call('exportProfile', f.ctx(), { provider: 'appsample', map });
+  assert.equal(exported.ok, true); assert.equal(f.saves(), 1);
+  assert.deepEqual(JSON.parse(await fs.readFile(f.output)).records.map(r => r.id), ['realm-marker']);
 });
 test('accepted settings Apply and main quit serialize without preparing the initiator inside its own transfer barrier', async t => {
   const { mountSettings } = require('../../src/settings/settings'); const I18n = require('../../src/shared/i18n'); const { makeSettingsDocument } = require('./settings-harness');

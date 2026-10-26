@@ -121,6 +121,26 @@ test('forged portable v2 provenance cannot revive a mapped undo on controller ex
   assert.deepEqual(out.envelope.records, []); assert.ok(out.report.counts.unsupported > 0);
 });
 
+test('unknown-to-known catalog refresh survives portable backup/import without fabricating a canonical register', async t => {
+  const f = await setup(t); const known = f.controller.getCatalog();
+  f.controller.getCatalog = () => ({ ...known, fingerprint: 'empty', markers: [] });
+  const p = await f.controller.previewImport(f.ctx(), { bytes: bytes(['42']), mode: 'merge' });
+  assert.equal((await f.controller.applyImport(f.ctx(), { previewId: p.id })).ok, true);
+  f.controller.getCatalog = () => known;
+  const options = { provider: 'appsample', map: 'appsample:gim:2' };
+  assert.deepEqual((await f.controller.exportProfile(f.ctx(), options)).envelope.records.map(r => [r.id, r.state]), [['42', true]]);
+  const portable = await f.service.exportBackup({ sessionGeneration: f.ctx().sessionGeneration, profileIds: [f.ctx().profileId] });
+  assert.equal(JSON.parse(portable.value).extensions.transfer.profiles['0'].records[0].mapping, null);
+  assert.equal((await f.service.importBackup({ sessionGeneration: f.ctx().sessionGeneration, bytes: Buffer.from(portable.value) })).ok, true);
+  const read = await f.service.readTransferState(f.ctx());
+  assert.equal(Object.hasOwn(read.profile.markers, '42'), false);
+  assert.deepEqual((await f.controller.exportProfile(f.ctx(), options)).envelope.records.map(r => [r.id, r.state]), [['42', true]]);
+  await f.service.setFound(f.ctx(), { id: 42, found: false });
+  assert.deepEqual((await f.controller.exportProfile(f.ctx(), options)).envelope.records, []);
+  await f.service.setFound(f.ctx(), { id: 42, found: true });
+  assert.deepEqual((await f.controller.exportProfile(f.ctx(), options)).envelope.records.map(r => [r.id, r.state]), [['42', true]]);
+});
+
 test('paused fake publication interlock blocks import until local critical section leaves', async t => {
   let leave; let enteredGate;
   const entered = new Promise(resolve => { leave = resolve; }); const atGate = new Promise(resolve => { enteredGate = resolve; }); const events = [];

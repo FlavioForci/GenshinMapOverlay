@@ -63,7 +63,10 @@ function planExport(profile, attachment, { provider, map, catalog, pack, metadat
     rows.forEach((row, i) => {
       const match = matches[i];
       if (!authorized(row.record, row.mapping, match)) { totals.unsupported++; blocked.add(row.record.id); return; }
-      if (match.status === 'matched') {
+      // A later catalog match is not an import or an undo. A genuinely unknown
+      // observation stays pass-through until an explicit canonical register exists.
+      const canonicalOverride = row.mapping !== null || row.record.mappingEvidence || Object.hasOwn(profile.markers, match.canonicalId);
+      if (match.status === 'matched' && canonicalOverride) {
         if (!originals.has(match.canonicalId)) originals.set(match.canonicalId, []);
         originals.get(match.canonicalId).push({ row, match });
         if (!profile.markers[match.canonicalId]?.value && !row.record.state) records.set(row.record.id, row.record);

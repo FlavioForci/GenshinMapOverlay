@@ -950,7 +950,8 @@ const quitSubscriptions = [
   }),
   api.onResumeAfterQuit(({ requestId }) => progressView.resumeAfterQuit(requestId)),
 ];
-window.addEventListener('beforeunload', () => quitSubscriptions.forEach(unsubscribe => unsubscribe()), { once: true });
+// Main may cancel navigation after beforeunload; dispose only when the page exits.
+window.addEventListener('pagehide', () => quitSubscriptions.forEach(unsubscribe => unsubscribe()), { once: true });
 api.on('progress:snapshot', snapshot => progressView.applySnapshot(snapshot));
 api.on('progress:toggle-hide-found', () => {
   if (!progressWritable) {

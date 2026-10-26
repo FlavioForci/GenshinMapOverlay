@@ -23,6 +23,9 @@
     let editedProfile = null;
     const cleanups = [];
     let providers = [];
+    let exportScopes = [];
+    let scopeRequest = 0;
+    let scopeReady = Promise.resolve();
     let transferPreview = null;
     let transferCounts = null;
     let transferCoverage = null;
@@ -79,7 +82,10 @@
         transferPreview = null;
         transferStatus = 'transfer.error.stale-preview';
       }
+      const changedContext = snapshot?.sessionGeneration !== value.sessionGeneration || snapshot?.activeProfile?.id !== value.activeProfile?.id;
       snapshot = value;
+      if (changedContext) { exportScopes = []; populateMaps(); }
+      scopeReady = refreshExportScopes();
       statusKey = null;
       render();
     }
@@ -158,9 +164,26 @@
       $('transfer-prior-label').hidden = !transferPreview?.priorDestinations.length;
     }
     function populateMaps() {
+      if (!transferApi) return;
       const provider = providers.find(row => row.provider === $('transfer-destination').value);
-      const options = [...new Set(provider?.variants.map(row => row.map) || [])].map(map => { const option = document.createElement('option'); option.value = map; option.textContent = map; return option; });
-      $('transfer-map').replaceChildren(...options); $('transfer-map').value = options[0]?.value || '';
+      const selected = $('transfer-map').value;
+      const maps = [...(provider?.variants.map(row => row.map) || []), ...exportScopes.filter(row => row.provider === provider?.provider).map(row => row.map)];
+      const options = [...new Set(maps)].map(map => { const option = document.createElement('option'); option.value = map; option.textContent = map; return option; });
+      $('transfer-map').replaceChildren(...options); $('transfer-map').value = options.some(option => option.value === selected) ? selected : options[0]?.value || '';
+    }
+    async function refreshExportScopes() {
+      const ticket = ++scopeRequest;
+      if (!transferApi?.exportScopes || !snapshot?.activeProfile || snapshot.sync.phase !== 'local') return;
+      const version = snapshot.viewVersion;
+      const context = { sessionGeneration: snapshot.sessionGeneration, profileId: snapshot.activeProfile.id };
+      try {
+        const result = await transferApi.exportScopes(context);
+        if (disposed || ticket !== scopeRequest || snapshot.viewVersion !== version) return;
+        exportScopes = result?.ok ? result.value : [];
+        populateMaps();
+      } catch {
+        if (!disposed && ticket === scopeRequest && snapshot.viewVersion === version) { exportScopes = []; populateMaps(); }
+      }
     }
     function clearPreview() {
       transferPreview = null; transferCounts = null; transferCoverage = null; transferDecisions = []; transferStatus = null; render();
@@ -298,7 +321,7 @@
     }
     // beforeunload can precede a navigation canceled by main; clean up only on exit.
     if (window) window.addEventListener('pagehide', dispose, { once: true });
-    return { ready: Promise.all([ready, transferReady]), command, dispose, prepareQuit, resumeAfterQuit };
+    return { ready: Promise.all([ready, transferReady]).then(() => scopeReady), command, dispose, prepareQuit, resumeAfterQuit };
   }
 
   return { mountSettings, validateProfileText };

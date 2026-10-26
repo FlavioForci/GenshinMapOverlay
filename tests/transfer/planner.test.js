@@ -44,6 +44,20 @@ test('mapped undo suppresses originals while unknown IDs pass back only to their
   assert.deepEqual(elsewhere.records, []);
 });
 
+test('a catalog refresh preserves genuine unknown observations until an explicit canonical register overrides them', () => {
+  const attachment = planImport(incoming([record('42')]), profile(), { ...catalog, markers: [] }, null).attachment;
+  assert.equal(attachment.records[0].mapping, null);
+  const before = planExport(profile(), attachment, options({ catalog: { ...catalog, markers: [] } }));
+  const refreshed = planExport(profile(), attachment, options());
+  assert.deepEqual(before.envelope.records, [record('42')]);
+  assert.deepEqual(refreshed.envelope.records, [record('42')]);
+  assert.deepEqual(refreshed.report.decisions, []); assert.equal(refreshed.report.counts.unknown, 1);
+  assert.deepEqual(planExport(profile({ 42: false }), attachment, options()).envelope.records, []);
+  const found = planExport(profile({ 42: true }), attachment, options()).envelope.records;
+  assert.equal(found.length, 1); assert.equal(found[0].id, '42'); assert.equal(found[0].state, true);
+  assert.equal(attachment.records[0].mapping, null);
+});
+
 test('reviewed originals and reverse output deduplicate and stale claims never pass through', () => {
   const pack = reviewed(); const e = external([record('a', true, pack.map), record('unknown', true, pack.map)]);
   const attachment = planImport(e, profile(), catalog, pack).attachment;
