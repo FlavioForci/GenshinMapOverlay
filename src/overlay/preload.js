@@ -1,7 +1,7 @@
 // Brücke zwischen Overlay-Fenster und Hauptprozess.
 const { contextBridge, ipcRenderer } = require('electron');
 
-const EVENTS = ['settings', 'progress:snapshot', 'progress:toggle-hide-found', 'tracker:status', 'data:markers', 'view', 'notice', 'panel:toggle', 'cursor'];
+const EVENTS = ['settings', 'progress:snapshot', 'progress:toggle-hide-found', 'tracker:status', 'data:markers', 'view', 'minimap', 'nearby:mark', 'notice', 'panel:toggle', 'cursor'];
 
 function subscribe(channel, callback) {
   const listener = (_event, payload) => callback(payload);
@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('overlayApi', {
   onPrepareQuit: callback => subscribe('progress:prepare-quit', callback),
   onResumeAfterQuit: callback => subscribe('progress:resume-after-quit', callback),
   quitReady: payload => ipcRenderer.send('progress:quit-ready', payload),
+  nearby: (id) => ipcRenderer.send('overlay:nearby', id),
   refreshData: () => ipcRenderer.send('overlay:refresh-data'),
   hide: () => ipcRenderer.send('overlay:hide'),
   icon: (type) => ipcRenderer.invoke('overlay:icon', type),

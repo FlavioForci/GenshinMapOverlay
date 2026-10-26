@@ -13,6 +13,7 @@ Deutsche Anleitung: [README.de.md](README.de.md)
 ## Features
 
 - Markers on the in-game map, placed by image recognition. They follow while you drag and zoom.
+- Markers on the minimap too, while you explore. Walk up to one and press **Alt+E** to mark it as found.
 - Click a marker for the community's top-voted photo of the spot, plus a video where there is one.
 - Right-click marks a marker as found. Hide found ones with one key and see your progress per type.
 - 690+ marker types in categories, with search.
@@ -103,6 +104,7 @@ Settings, cache, log and found markers are in `~/.config/Genshin Map Overlay`. T
 | **F8** | Open/close the marker panel |
 | **F9** | Show/hide found markers |
 | **F10** | Change marker opacity |
+| **Alt+E** | Mark the nearby marker as found (only while the prompt next to the minimap shows) |
 
 - **Left-click a marker:** the spot card opens with the photo or video. Click the photo to enlarge it.
 - **Right-click a marker:** mark it as found (or not found again).
@@ -144,6 +146,17 @@ adapters or cross-provider mapping packs are installed. No Google sign-in or liv
 included. See the [local transfer guide and dated support matrix](docs/map-transfers.md) for file
 formats, undo/retry/recovery behavior, browser limits and remaining acceptance gates.
 
+### Minimap
+
+- After starting the overlay or after a teleport, open the map once with **M** and close it again.
+  The map opens centered on you, so the overlay knows where you are and shows the ticked marker
+  types on the minimap.
+- Walk close to a marker: it gets a ring and a prompt appears next to the minimap. **Alt+E** marks it
+  as found. The key is only taken while the prompt shows.
+- Switch it off in the panel or in the tray menu (**Markers on the minimap**).
+- Tested at 16:9 resolutions in fullscreen or borderless. In window mode or at other aspect ratios
+  (16:10, 21:9) the minimap markers may not show yet; the map markers work everywhere.
+
 ## Is it safe for my account?
 
 The overlay is a separate, see-through window. It
@@ -180,6 +193,8 @@ Tray menu → **Advanced** → **Open settings file**, then **Reload settings**.
 | `markerSize` | Marker size in pixels at 1080p (also in the panel) |
 | `language` | `"en"` or `"de"`; empty = from the setup or Windows |
 | `showInCaptures` | `true` = overlay shows up in screenshots, recordings and streams (also in the panel) |
+| `minimap` | `false` = no markers on the minimap (also in the panel and tray menu) |
+| `nearbyRadius` | How close a marker must be for the Alt+E prompt, in map pixels (default 7) |
 | `genshinPath` | Path to `GenshinImpact.exe` if it isn't found automatically |
 
 ## Privacy
