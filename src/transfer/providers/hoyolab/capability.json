@@ -1,0 +1,81 @@
+{
+  "provider": "hoyolab",
+  "adapterVersion": "0.1.0",
+  "status": "planned",
+  "variants": [
+    {
+      "id": "international-web",
+      "origins": [
+        "https://act.hoyolab.com"
+      ],
+      "map": "hoyolab:ys_obc:2",
+      "generation": "bundle_cecaae550a4003092d80:1_6be3a4156dff00602a2f",
+      "accountTier": "unverified",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "d4dab38636800d2fa6115887309bd0d8f13dc1ef3b23066135c205ad68ce9e2c",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "GET",
+          "origin": "https://sg-public-api-static.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v3/map/point/list"
+        },
+        {
+          "method": "GET",
+          "origin": "https://sg-public-api-static.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v2/map/label/tree"
+        },
+        {
+          "method": "GET",
+          "origin": "https://sg-public-api-static.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v3/map/info"
+        },
+        {
+          "method": "GET",
+          "origin": "https://sg-public-api-static.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v2/map/point_group"
+        },
+        {
+          "method": "GET",
+          "origin": "https://sg-public-api.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v1/map/point/mark_map_point_list"
+        },
+        {
+          "method": "POST",
+          "origin": "https://sg-public-api.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v1/map/point/add_mark_map_point"
+        },
+        {
+          "method": "POST",
+          "origin": "https://sg-public-api.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v1/map/point/batch_mark_map_point"
+        },
+        {
+          "method": "POST",
+          "origin": "https://sg-public-api.hoyolab.com",
+          "path": "/common/map_user/ys_obc/v1/map/point/new_del_mark_map_point"
+        }
+      ],
+      "statePaths": [
+        "state.markPointList"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "disposable-account-acceptance-pending"
+    }
+  ],
+  "reasonCode": "disposable-account-acceptance-pending"
+}

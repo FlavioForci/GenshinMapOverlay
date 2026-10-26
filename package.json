@@ -10,6 +10,10 @@
   "scripts": {
     "start": "electron .",
     "test:match": "node tools/match-test.js",
+    "test:progress": "node --test \"tests/progress/*.test.js\"",
+    "build:transfer-scripts": "node tools/build-transfer-scripts.js",
+    "check:transfer-package": "node tools/check-transfer-package.js",
+    "test:transfer": "node --test \"tests/transfer/*.test.js\"",
     "dist": "electron-builder --win nsis",
     "data:build": "node server/tools/build-data.js",
     "data:import-comments": "node server/tools/import-comments.js",
@@ -20,6 +24,9 @@
     "dist:mac": "electron-builder --mac --arm64 --publish never",
     "dist:linux": "electron-builder --linux --x64 --publish never"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "build": {
     "appId": "local.genshin-map-overlay",
     "productName": "Genshin Map Overlay",
@@ -27,7 +34,8 @@
       "src/**/*",
       "assets/**/*",
       "node_modules/@techstark/opencv-js/dist/opencv.js",
-      "package.json"
+      "package.json",
+      "docs/map-transfers.md"
     ],
     "win": {
       "target": [
@@ -95,9 +103,16 @@
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
     "sharp": "^0.35.5",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.35.0"
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true,
+    "esbuild@0.25.4": true,
+    "sharp@0.33.5": true,
+    "workerd@1.20250906.0": true
   }
 }

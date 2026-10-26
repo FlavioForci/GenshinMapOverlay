@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Genshin Map Overlay</title>
+  <link rel="stylesheet" href="../overlay/overlay.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main>
+    <header><img src="../../assets/icon.png" width="32" height="32" alt=""><h1 data-i18n="profiles.title"></h1></header>
+    <p data-i18n="profiles.intro"></p>
+    <p><span data-i18n="profiles.active"></span> <strong id="active-profile"></strong></p>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section>
+      <label for="profiles" data-i18n="profiles.list"></label>
+      <div class="row"><select id="profiles"></select><button id="select" type="button" data-i18n="profiles.select"></button></div>
+      <label for="name" data-i18n="profiles.name"></label><input id="name" type="text" autocomplete="off">
+      <label for="region" data-i18n="profiles.region"></label><input id="region" type="text" autocomplete="off">
+      <p class="hint" data-i18n="profiles.nameHelp"></p>
+      <div class="row"><button id="create" type="button" data-i18n="profiles.create"></button><button id="rename" type="button" data-i18n="profiles.rename"></button></div>
+    </section>
+    <section><h2 data-i18n="profiles.backups"></h2><p data-i18n="profiles.backupHelp"></p>
+      <div class="row"><button id="import-backup" type="button" data-i18n="profiles.import"></button><button id="export-backup" type="button" data-i18n="profiles.export"></button></div>
+    </section>
+    <section aria-labelledby="transfer-title">
+      <h2 id="transfer-title" data-i18n="transfer.title"></h2>
+      <p data-i18n="transfer.pending"></p><p data-i18n="transfer.addOnly"></p><p data-i18n="transfer.localOnly"></p>
+      <details><summary data-i18n="transfer.capabilities"></summary><pre id="transfer-capabilities"></pre></details>
+      <h3 data-i18n="transfer.fromSite"></h3>
+      <label for="transfer-source" data-i18n="transfer.source"></label><select id="transfer-source"></select>
+      <button id="transfer-source-script" type="button" data-i18n="transfer.sourceScript"></button>
+      <p class="hint" data-i18n="transfer.instructions"></p>
+      <label for="transfer-mode" data-i18n="transfer.mode"></label><select id="transfer-mode"><option value="new" data-i18n="transfer.new"></option><option value="merge" data-i18n="transfer.merge"></option></select>
+      <label for="transfer-name" data-i18n="profiles.name"></label><input id="transfer-name" type="text" autocomplete="off">
+      <label for="transfer-region" data-i18n="profiles.region"></label><input id="transfer-region" type="text" autocomplete="off">
+      <button id="transfer-preview" type="button" data-i18n="transfer.preview"></button>
+      <p id="transfer-status" role="status" aria-live="polite"></p>
+      <p id="transfer-counts" aria-live="polite"></p><p id="transfer-coverage"></p>
+      <label id="transfer-prior-label" for="transfer-prior" data-i18n="transfer.prior" hidden></label><select id="transfer-prior" hidden></select>
+      <div class="row"><button id="transfer-use-prior" type="button" data-i18n="transfer.usePrior" hidden></button><button id="transfer-another" type="button" data-i18n="transfer.another" hidden></button><button id="transfer-apply" type="button" data-i18n="transfer.apply" disabled></button><button id="transfer-report" type="button" data-i18n="transfer.report" disabled></button></div>
+      <h3 data-i18n="transfer.toSite"></h3>
+      <label for="transfer-destination" data-i18n="transfer.destination"></label><select id="transfer-destination"></select>
+      <label for="transfer-map" data-i18n="transfer.map"></label><select id="transfer-map"></select>
+      <div class="row"><button id="transfer-export" type="button" data-i18n="transfer.export"></button><button id="transfer-destination-script" type="button" data-i18n="transfer.destinationScript"></button></div>
+      <pre id="transfer-decisions"></pre>
+    </section>
+    <section><p id="recovery-help" hidden data-i18n="profiles.recoveryHelp"></p>
+      <div class="row"><button id="retry-local" type="button" hidden data-i18n="profiles.retry"></button><button id="restore-local" type="button" hidden data-i18n="profiles.restore"></button></div>
+    </section>
+  </main>
+  <script src="../shared/i18n.js"></script><script src="settings.js"></script>
+</body>
+</html>

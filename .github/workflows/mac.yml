@@ -21,15 +21,29 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22.12.0
           cache: npm
 
       - run: npm ci
+
+      - name: Verify progress and transfers
+        run: |
+          npm run test:progress
+          npm run test:transfer
+          npm run build:transfer-scripts
+          git diff --exit-code -- src/transfer/scripts
 
       - name: App bauen
         run: npm run dist:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Verify packaged transfer files
+        run: |
+          TRANSFER_CHECK_DIR=$(mktemp -d)
+          trap 'rm -rf "$TRANSFER_CHECK_DIR"' EXIT
+          node node_modules/@electron/asar/bin/asar.js extract "dist/mac-arm64/Genshin Map Overlay.app/Contents/Resources/app.asar" "$TRANSFER_CHECK_DIR/app"
+          npm run check:transfer-package -- "$TRANSFER_CHECK_DIR/app"
 
       # Ohne Apple-Entwicklerkonto: Ad-hoc-Signatur, sonst startet die App auf Apple Silicon nicht
       - name: Signieren und packen

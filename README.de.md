@@ -104,7 +104,29 @@ Einstellungen, Cache, Log und gefundene Marker liegen in `~/.config/Genshin Map 
 - Klicks neben die Marker gehen ganz normal ans Spiel (ziehen, zoomen, Wegpunkte setzen).
 - Außerhalb der Karte hält das Spiel die Maus fest. Dort **Alt** gedrückt halten, um im Panel zu klicken.
 
-Gefundene Marker werden nur auf deinem PC gespeichert (`%APPDATA%\Genshin Map Overlay\found.json`).
+Der Fortschritt wird lokal in benannten Profilen gespeichert. Öffne **Profile & Übertragung** im
+Tray-Menü oder Marker-Panel, um ein Profil anzulegen, Name und Region / Notiz zu ändern oder das Profil
+zu wechseln. Jedes Profil hat eigene gefundene Marker, Markerfilter und die F9-Sichtbarkeit.
+
+Unter Windows liegen die lokalen Dateien in `%APPDATA%\Genshin Map Overlay\progress`, unter macOS in
+`~/Library/Application Support/Genshin Map Overlay/progress`. Beim ersten Upgrade werden `found.json`
+und die alten Marker-Einstellungen aus `settings.json` einmalig importiert. Ihre ursprünglichen Bytes
+bleiben in internen Wiederherstellungssicherungen erhalten. Spätere Änderungen an diesen alten Feldern
+ändern den Profilfortschritt nicht.
+
+Mit **Alle Profile exportieren…** erstellst du eine portable JSON-Sicherung. **Sicherung importieren…**
+legt neue Profile an, erhält vorhandene Profile und aktiviert das erste importierte Profil. Beim Abbrechen
+eines Dialogs ändert sich nichts. Die Sicherungen enthalten wirksamen Fortschritt und Profileinstellungen,
+aber keine Konto- oder Installationsidentität. Bewahre eine Kopie außerhalb des App-Ordners auf; ein
+Google-Konto oder eine Cloud-Einrichtung ist nicht nötig.
+
+Wenn lokale Dateien nicht lesbar sind oder eine Speicherung nicht bestätigt werden kann, ist der
+Fortschritt schreibgeschützt. Behebe den Speicherzugriff und wähle in **Profile & Übertragung** zunächst
+**Lokale Dateien erneut versuchen**; dabei werden aktuelle Daten gelesen und keine älteren Daten
+wiederhergestellt. **Letzte gültige Sicherung wiederherstellen** ersetzt den lokalen Fortschritt ausdrücklich
+durch den geprüften vorherigen Stand und erhält Originaldateien zur Wiederherstellung. Kann das Beenden
+eine Speicherung nicht abschließen, bleibt die App mit einer Fehlermeldung offen. Behebe das Speicherproblem
+und versuche erneut zu beenden.
 
 ## Ist das sicher für meinen Account?
 
