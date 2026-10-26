@@ -80,9 +80,16 @@
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
     "sharp": "^0.35.5",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.35.0"
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true,
+    "esbuild@0.25.4": true,
+    "sharp@0.33.5": true,
+    "workerd@1.20250906.0": true
   }
 }

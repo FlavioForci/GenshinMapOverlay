@@ -1,6 +1,8 @@
-# Project analysis for Google Drive sync
+# Project analysis for cross-platform online map and progress
 
 Date: 2026-10-24. Source revision: `3af5eb6` (`main`).
+
+> Scope update: this source inventory was first written while considering Drive-only sync. The user has since clarified that the product must provide the full map in a phone/desktop browser and live shared progress with the Electron overlay, assuming internet access. Drive-specific design conclusions below are historical research, not the current proposal. See [the revised cross-platform design](../specs/2026-10-24-cross-platform-map-design.md).
 
 ## Coverage and evidence
 
@@ -44,7 +46,7 @@ Sync must load durable progress before sending initial state, start in the backg
 
 Persist the source marker ID plus a fixed source/map namespace (`appsample:gim:2`), never the array index, translated type name, coordinates or tileset version. Preserve unknown marker IDs across map-data updates; a missing marker is not a request to erase its progress. Sharing this namespace with AppSample does not provide access to AppSample accounts.
 
-Public downloads use TTL/immutable local caches and some in-memory deduplication. They are not suitable for private data: their cache behavior can hide errors or return stale bytes deliberately. Drive needs a separate transport with explicit retry/error handling and account credentials.
+Public downloads use TTL/immutable local caches and some in-memory deduplication. They are not suitable for private data: their cache behavior can hide errors or return stale bytes deliberately. The browser map needs a browser-safe public data path; private progress requires a separate authenticated backend and realtime transport.
 
 ## Current found-state path
 
@@ -71,7 +73,7 @@ Proposed sync scope: profile name, optional region label, found/open marker stat
 
 Both renderers have `contextIsolation: true`, `sandbox: true`, and `nodeIntegration: false`. Preloads expose narrow APIs. Main validates the sending `webContents` for current IPC. Overlay CSP permits local scripts and local/blob/data images, without external connections. The tracker alone is allowed screen capture by comparing the requesting frame with the tracker main frame.
 
-Keep Google OAuth, tokens, HTTP, disk access and account switching in the main process. Renderers receive display-safe account/profile/status data only. Do not add Google scripts, remote OAuth pages or broader network CSP to the overlay. New IPC should check the intended top-level frame and window, validate payloads and return plain result objects.
+Keep credentials, account switching and progress writes behind narrow, validated client boundaries. Renderers receive only the account/profile/status/progress data they need. Do not add remote scripts or broaden the overlay CSP unnecessarily. New IPC should check the intended top-level frame and window, validate payloads and return plain result objects.
 
 The overlay is normally `focusable: false` and toggles focus only for marker search. Profile naming, account setup, import/export and confirmation flows fit a small ordinary settings window opened from the tray; the overlay only needs a compact profile selector and status/action shortcut. New UI must use the existing EN/DE text system.
 
@@ -79,16 +81,16 @@ The overlay is normally `focusable: false` and toggles focus only for marker sea
 
 - Windows is the primary target; macOS Apple Silicon is beta. Existing tray/capture/helper branches must remain compatible.
 - Mac packaging sets `identity: null` and CI applies an ad hoc signature. Electron documents less consistent Keychain identity across unsigned/ad hoc updates; handle decryption failure by reconnecting, preserving cached progress.
-- `safeStorage` can protect refresh-token bytes locally; encrypted blobs must never be copied into Drive/exported backups. Treat unavailable encryption as a reason to avoid token persistence, not to fall back to plaintext.
+- Any persisted credential handling must use the platform's protected storage; never put credentials in backups or public bundles.
 - `package.json` and `package-lock.json` root versions disagree (`1.1.0` versus `1.3.1`). Reconcile to the intended package version when changing dependencies; do not invent a release bump.
 - README/CI specify Node 20, but the lockfile has Electron `45.0.0` requiring `>=22.12.0` and Wrangler `4.152.0` requiring `>=22.0.0`. Adopt a documented Node floor of `22.12.0` for implementation/build checks.
-- Runtime dependency today is only OpenCV.js. An OAuth dependency must be a production dependency and present in packaged apps; packaging currently has an explicit `build.files` list.
+- Runtime dependency today is only OpenCV.js; a shared online backend SDK must be packaged for Electron, and packaging currently has an explicit `build.files` list.
 - Three `data:import-*` scripts reference tools excluded by `.gitignore` and absent from the checkout. They are unrelated to sync and cannot be assumed available during validation.
 - There is no general automated storage/sync test suite. Add focused Node built-in tests for the new data-loss/account-isolation risks; do not make routine sync verification download thousands of map tiles.
 
 ## Public documentation changes required by sync
 
-Both READMEs currently state that found progress is local only and the app uploads nothing. New copy must explain optional Drive uploads and retained offline progress. The website needs an accurate privacy notice and a public policy URL for OAuth publishing. Screen captures must continue to stay local; its existing screen-permission text is specifically about captures and should remain truthful.
+Both READMEs currently state that found progress is local only and the app uploads nothing. New copy must explain private online progress and live synchronization. The website needs an accurate privacy notice. Screen captures must continue to stay local; its existing screen-permission text is specifically about captures and should remain truthful.
 
 The static site and READMEs link to `FlavioForci/GenshinMapOverlay` for downloads. The user's repository is now `mikilimj/GenshinMapOverlay`; use that for new project/release links, while retaining AppSample and upstream credit. Do not publish the new privacy page to the old Cloudflare project by accident: hosting ownership/deployment destination requires configuration by the maintainer.
 
@@ -101,4 +103,4 @@ The static site and READMEs link to `FlavioForci/GenshinMapOverlay` for download
 - [OAuth audience/publishing](https://support.google.com/cloud/answer/15549945?hl=en): Testing limits and seven-day authorization lifetime for Drive scopes.
 - [Paimon.moe settings](https://paimon.moe/settings): confirms its use of Drive's application data directory.
 
-The detailed design is recorded separately. No Google Cloud project, account connection, remote upload, product code or dependency change was made during this analysis.
+The initial Drive design was superseded by the cross-platform map design. No remote account, upload, product code or backend configuration was made during this analysis.
