@@ -240,8 +240,11 @@ function showOverlay() {
   keepOnTop();
 }
 
+// Aufnahmeschutz mit auffrischen: ging nach Auflösungswechseln verloren, dann sieht der Tracker die eigenen Marker
 function keepOnTop() {
-  if (alive(overlayWin) && overlayWin.isVisible()) overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  if (!alive(overlayWin) || !overlayWin.isVisible()) return;
+  overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  overlayWin.setContentProtection(!cfg.showInCaptures);
 }
 
 // Genshin (Admin) vorne → forward-Mausereignisse fehlen, Cursor daher selbst abfragen.
