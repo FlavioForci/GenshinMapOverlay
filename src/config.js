@@ -13,6 +13,8 @@ const DEFAULTS = {
     togglePanel: 'F8',
     toggleFound: 'F9',
     cycleOpacity: 'F10',
+    // nur aktiv, solange ein Marker in der Nähe angeboten wird
+    markNearby: 'Alt+E',
   },
   hotkeysEnabled: true,
   active: true,
@@ -23,6 +25,9 @@ const DEFAULTS = {
   hideFound: DEFAULT_PROFILE_PREFERENCES.hideFound,
   // false: Overlay fehlt in Aufnahmen, stört so auch den Tracker nicht
   showInCaptures: false,
+  // Marker auf der Minimap (Weltansicht); „in der Nähe“-Hinweis bis zu so vielen Kartenpixeln (z13)
+  minimap: true,
+  nearbyRadius: 7,
   opacity: 1,
   opacitySteps: [1, 0.75, 0.5],
   markerSize: 26,
@@ -53,6 +58,7 @@ function normalize(raw) {
   if (!Array.isArray(cfg.opacitySteps) || !cfg.opacitySteps.length) cfg.opacitySteps = DEFAULTS.opacitySteps;
   cfg.opacitySteps = cfg.opacitySteps.map((v) => clamp(v, 0.2, 1, 1));
   cfg.markerSize = clamp(cfg.markerSize, 14, 48, DEFAULTS.markerSize);
+  cfg.nearbyRadius = clamp(cfg.nearbyRadius, 1, 30, DEFAULTS.nearbyRadius);
   cfg.trackingFps = clamp(cfg.trackingFps, 1, 30, DEFAULTS.trackingFps);
   cfg.searchIntervalMs = clamp(cfg.searchIntervalMs, 100, 5000, DEFAULTS.searchIntervalMs);
   if (!Array.isArray(cfg.enabledTypes)) cfg.enabledTypes = DEFAULTS.enabledTypes;

@@ -28,6 +28,8 @@
     zoomRange: [-4.5, 2.5], // erlaubtes log2(s): s = Bildschirmpixel je Kartenpixel
     globalLevels: null, // null = alle Referenz-Zoomstufen
     maskUi: true, // Symbole/Schrift der Ingame-Karte ausblenden
+    mask: null, // Einstellungen für uiMask (null = Standard)
+    globalMask: undefined, // Maske der Grobsuche ohne prior (undefined = wie mask)
   };
 
   function mergeOptions(options) {
@@ -73,7 +75,13 @@
 
   // Symbole/Schrift der Ingame-Karte ausblenden (fehlen in den Kacheln):
   // - fast weiß, orange Schilder, sehr dunkle Rahmen, jeweils samt Rand (erode)
-  function uiMask(cv, rgba, width, height) {
+  // - mask.purple: lila Symbole (in der Karte selbst kaum vorhanden), mask.dark/erode einstellbar
+  // - mask.gray: dunkle, fast farblose Pixel (Ränder der Spiel-Symbole); farbiges dunkles Gelände bleibt
+  // - mask.sea: dunkles, blaustichiges Meer (ohne Merkmale, nur Wellenrauschen)
+  const MASK_DEFAULTS = { dark: 45, erode: 9, purple: false, gray: 0, sea: 0 };
+
+  function uiMask(cv, rgba, width, height, options) {
+    const o = { ...MASK_DEFAULTS, ...(options || {}) };
     const mask = new cv.Mat(height, width, cv.CV_8U);
     const m = mask.data;
     for (let i = 0, p = 0; p < m.length; i += 4, p++) {
@@ -84,10 +92,13 @@
       const max = r > g ? (r > b ? r : b) : (g > b ? g : b);
       const white = min > 215;
       const orange = r > 190 && b < 110 && r - b > 100 && g > 100 && g < 200;
-      const dark = max < 45;
-      m[p] = white || orange || dark ? 0 : 255;
+      const dark = max < o.dark;
+      const purple = o.purple && r > 90 && b > 110 && g * 1.25 < (r < b ? r : b);
+      const gray = max < o.gray && max - min < 22;
+      const sea = max < o.sea && b >= g && b > r + 15;
+      m[p] = white || orange || dark || purple || gray || sea ? 0 : 255;
     }
-    const kernel = cv.Mat.ones(9, 9, cv.CV_8U);
+    const kernel = cv.Mat.ones(o.erode, o.erode, cv.CV_8U);
     cv.erode(mask, mask, kernel);
     kernel.delete();
     return mask;
@@ -467,18 +478,23 @@
       const cv = this.cv;
       const started = Date.now();
       let gray = rgbaToGray(cv, rgba, width, height);
-      let usable = this.o.maskUi ? uiMask(cv, rgba, width, height) : null;
       const scale = Math.min(1, this.o.maxWidth / width);
       if (scale < 1) {
         const small = resized(cv, gray, scale);
         gray.delete();
         gray = small;
-        if (usable) {
-          const smallMask = resized(cv, usable, scale, cv.INTER_NEAREST);
-          usable.delete();
-          usable = smallMask;
-        }
       }
+      const makeMask = (opts) => {
+        if (!this.o.maskUi) return null;
+        const full = uiMask(cv, rgba, width, height, opts);
+        if (scale >= 1) return full;
+        const small = resized(cv, full, scale, cv.INTER_NEAREST);
+        full.delete();
+        return small;
+      };
+      // Grobsuche ohne prior darf eine eigene (vorsichtigere) Maske haben
+      const globalOpts = this.o.globalMask === undefined ? this.o.mask : this.o.globalMask;
+      let usable = makeMask(prior ? this.o.mask : globalOpts);
 
       const timing = { detect: 0, match: 0 };
       let mode = 'track';
@@ -510,6 +526,10 @@
       }
 
       if (start) {
+        if (!prior && globalOpts !== this.o.mask) {
+          if (usable) usable.delete();
+          usable = makeMask(this.o.mask);
+        }
         const fine = this.pass(gray, this.o.track, start, usable);
         timing.detect += fine.tDetect;
         timing.match += fine.tMatch;
@@ -553,6 +573,7 @@
     minInlierRatio: 0.5,
     minSpread: 0.2,
     exclude: null, // (W, H) → [[x0, y0, x1, y1]]: feste Bedienelemente, dort keine Punkte
+    mask: null, // Einstellungen für uiMask
   };
 
   class FlowTracker {
@@ -593,7 +614,7 @@
     // Kartenfläche ohne Symbole/Schrift und ohne feste Bedienelemente
     pointMask(rgba, width, height) {
       const cv = this.cv;
-      const mask = uiMask(cv, rgba, width, height);
+      const mask = uiMask(cv, rgba, width, height, this.o.mask);
       for (const [x0, y0, x1, y1] of this.o.exclude ? this.o.exclude(width, height) : []) {
         cv.rectangle(mask, new cv.Point(Math.round(x0), Math.round(y0)), new cv.Point(Math.round(x1), Math.round(y1)), new cv.Scalar(0), -1);
       }
@@ -724,6 +745,7 @@
         ms: Date.now() - started,
         inliers: fit.inliers,
         pairs: keep.length,
+        points: n,
         spread: [fit.spreadX, fit.spreadY],
         s: fit.s,
         tx: fit.tx,

@@ -14,10 +14,26 @@
     ['br', 0, 0, 470, 102],
   ];
 
+  // Tracker großzügiger: stillstehende Punkte ziehen den Fluss sonst auf „keine Bewegung“
+  // - Quest-Liste mit vielen Einträgen (bis ~7), Marker-Reiter des Overlays rechts mittig
+  const TRACKER_ZONES = [
+    ['tl', 0, 0, 360, 440],
+    ...ZONES.slice(1),
+    ['mr', 0, -70, 48, 70],
+  ];
+
   // → [[x0, y0, x1, y1], …] in Pixeln eines W×H-Bildes
   function rects(W, H) {
+    return toRects(ZONES, W, H);
+  }
+
+  function trackerRects(W, H) {
+    return toRects(TRACKER_ZONES, W, H);
+  }
+
+  function toRects(zones, W, H) {
     const k = H / 1080;
-    return ZONES.map(([corner, x0, y0, x1, y1]) => {
+    return zones.map(([corner, x0, y0, x1, y1]) => {
       const left = corner.endsWith('l');
       const xa = left ? x0 * k : W - x1 * k;
       const xb = left ? x1 * k : W - x0 * k;
@@ -27,5 +43,5 @@
     });
   }
 
-  return { ZONES, rects };
+  return { ZONES, TRACKER_ZONES, rects, trackerRects };
 });

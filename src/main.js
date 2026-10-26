@@ -54,6 +54,8 @@ const state = {
   hotkeyErrors: [],
   isAdmin: false,
   helperConnected: false,
+  // Marker-Id, die das Overlay gerade „in der Nähe“ anbietet (Nähe-Taste), sonst null
+  nearby: null,
 };
 
 const tr = (key, params) => I18n.t(lang, key, params);
@@ -372,8 +374,11 @@ function showOverlay() {
   keepOnTop();
 }
 
+// Aufnahmeschutz mit auffrischen: ging nach Auflösungswechseln verloren, dann sieht der Tracker die eigenen Marker
 function keepOnTop() {
-  if (alive(overlayWin) && overlayWin.isVisible()) overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  if (!alive(overlayWin) || !overlayWin.isVisible()) return;
+  overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  overlayWin.setContentProtection(!cfg.showInCaptures);
 }
 
 // Genshin (Admin) vorne → forward-Mausereignisse fehlen, Cursor daher selbst abfragen.
@@ -457,6 +462,8 @@ function publicSettings() {
     showInCaptures: cfg.showInCaptures,
     // Linux kennt keinen Aufnahmeschutz → Schalter im Panel ausblenden
     captureProtection: !IS_LINUX,
+    minimap: cfg.minimap,
+    nearbyRadius: cfg.nearbyRadius,
     opacity: cfg.opacity,
     markerSize: cfg.markerSize,
     active: cfg.active,
@@ -471,6 +478,7 @@ function trackerSettings() {
     tileset: TILESET,
     fps: cfg.trackingFps,
     searchIntervalMs: cfg.searchIntervalMs,
+    minimap: cfg.minimap,
     displaySize: { width: display.size.width * display.scaleFactor, height: display.size.height * display.scaleFactor },
   };
 }
@@ -523,12 +531,19 @@ function notify(text) {
 function setActive(on) {
   updateSettings({ active: on });
   sendToTracker('tracker:settings', trackerSettings());
+  updateNearbyHotkey();
   if (on) {
     showOverlay();
     notify(tr('notice.overlayOn'));
   } else if (alive(overlayWin)) {
     overlayWin.hide();
   }
+}
+
+// Marker auf der Minimap an/aus (Tray und Panel): Tracker hört dann auch mit der Minimap-Verfolgung auf
+function setMinimap(on) {
+  updateSettings({ minimap: on });
+  sendToTracker('tracker:settings', trackerSettings());
 }
 
 function togglePanel() {
@@ -651,22 +666,56 @@ const HOTKEY_ACTIONS = {
   togglePanel,
   toggleFound: toggleFoundVisibility,
   cycleOpacity,
+  markNearby,
 };
+
+// Marker in der Nähe (Minimap) als gefunden markieren
+function markNearby() {
+  const id = state.nearby;
+  if (id === null) return;
+  sendToOverlay('nearby:mark', id);
+}
+
+// Nähe-Taste nur, solange das Overlay einen Marker anbietet: sonst bleibt sie für Spiel und andere Programme frei
+function activeHotkeys() {
+  if (!cfg.hotkeysEnabled) return {};
+  const { markNearby: nearbyKey, ...rest } = cfg.hotkeys;
+  return state.nearby !== null && cfg.active && nearbyKey ? { ...rest, markNearby: nearbyKey } : rest;
+}
+
+let nearbyRegistered = null;
+function updateNearbyHotkey() {
+  if (bridge.connected) {
+    bridge.setHotkeys(activeHotkeys());
+    return;
+  }
+  const wanted = activeHotkeys().markNearby || null;
+  if (wanted === nearbyRegistered) return;
+  if (nearbyRegistered) globalShortcut.unregister(nearbyRegistered);
+  nearbyRegistered = null;
+  if (!wanted) return;
+  try {
+    if (globalShortcut.register(wanted, markNearby)) nearbyRegistered = wanted;
+  } catch {
+    // belegt oder ungültig: Hinweis zeigt die Taste trotzdem, sie wirkt nur nicht
+  }
+}
 
 // Ohne Helfer greifen die Kürzel nicht, solange Genshin (Admin) im Vordergrund ist
 function registerHotkeys() {
   globalShortcut.unregisterAll();
+  nearbyRegistered = null;
   state.hotkeyErrors = [];
-  bridge.setHotkeys(cfg.hotkeysEnabled ? cfg.hotkeys : {});
+  bridge.setHotkeys(activeHotkeys());
   if (bridge.connected) {
     sendToOverlay('settings', publicSettings());
     updateTrayMenu();
     return;
   }
   if (cfg.hotkeysEnabled) {
-    for (const [name, accelerator] of Object.entries(cfg.hotkeys)) {
+    for (const [name, accelerator] of Object.entries(activeHotkeys())) {
       const action = HOTKEY_ACTIONS[name];
-      if (!action || !accelerator) continue;
+      if (!action || !accelerator || name === 'markNearby') continue;
       let ok = false;
       try {
         ok = globalShortcut.register(accelerator, action);
@@ -676,6 +725,7 @@ function registerHotkeys() {
       if (!ok) state.hotkeyErrors.push(name);
     }
   }
+  updateNearbyHotkey();
   if (state.hotkeyErrors.length) {
     log(`hotkeys: nicht registriert – ${state.hotkeyErrors.join(', ')}`);
     notify(tr('notice.hotkeysTaken', { keys: hotkeyErrorText() }));
@@ -743,6 +793,7 @@ function updateTrayMenu() {
     { label: tr('tray.active'), type: 'checkbox', checked: cfg.active, click: (item) => setActive(item.checked), ...hotkeyLabel('toggleOverlay') },
     { label: tr('tray.panel'), click: togglePanel, ...hotkeyLabel('togglePanel') },
     { label: tr('tray.profiles'), click: openProfileSettings },
+    { label: tr('tray.minimap'), type: 'checkbox', checked: cfg.minimap !== false, click: (item) => setMinimap(item.checked) },
     {
       label: tr('tray.helperStart'),
       visible: IS_WIN && !state.helperConnected && !state.isAdmin && cfg.hotkeysEnabled,
@@ -846,6 +897,7 @@ ipcMain.on('overlay:settings', (event, patch) => {
   if (Number.isFinite(patch.opacity)) allowed.opacity = Math.min(1, Math.max(0.2, patch.opacity));
   if (Number.isFinite(patch.markerSize)) allowed.markerSize = Math.min(48, Math.max(14, patch.markerSize));
   updateSettings(allowed);
+  if (typeof patch.minimap === 'boolean') setMinimap(patch.minimap);
 });
 
 ipcMain.on('overlay:refresh-data', (event) => {
@@ -968,4 +1020,18 @@ ipcMain.on('tracker:view', (event, view) => {
     if (tray) tray.setToolTip(tr('tray.tooltip', { status: tr(view.locked ? 'tray.locked' : 'tray.searching') }));
   }
   sendToOverlay('view', view);
+});
+
+// Marker in der Nähe der Spielfigur (Id) oder null → Nähe-Taste an/aus
+ipcMain.on('overlay:nearby', (event, id) => {
+  if (!fromOverlay(event)) return;
+  const next = Number.isFinite(id) ? id : null;
+  if (next === state.nearby) return;
+  state.nearby = next;
+  updateNearbyHotkey();
+});
+
+// Spielfigur auf der Minimap (Kartenpixel) oder null
+ipcMain.on('tracker:minimap', (event, pos) => {
+  if (fromTracker(event)) sendToOverlay('minimap', pos);
 });

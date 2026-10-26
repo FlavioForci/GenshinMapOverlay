@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('trackerApi', {
   saveReference: (key, bytes) => ipcRenderer.invoke('tracker:reference-save', key, bytes),
   status: (status) => ipcRenderer.send('tracker:status', status),
   view: (view) => ipcRenderer.send('tracker:view', view),
+  minimap: (pos) => ipcRenderer.send('tracker:minimap', pos),
   log: (text) => ipcRenderer.send('tracker:log', String(text)),
   on: (channel, callback) => {
     if (EVENTS.includes(channel)) ipcRenderer.on(channel, (_event, payload) => callback(payload));

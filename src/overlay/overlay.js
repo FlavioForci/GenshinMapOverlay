@@ -23,6 +23,11 @@ let trackerStatus = { phase: 'starting', message: '', progress: 0 };
 let target = null;
 let velocity = null;
 let view = null;
+// Spielfigur auf der Minimap (Kartenpixel), vom Tracker; null = keine Minimap-Marker
+let minimap = null;
+// angebotener Marker in der Nähe (Index in data.markers) und kurz die Bestätigung nach dem Markieren
+let nearby = -1;
+let nearbyDoneUntil = 0;
 let visibility = 0;
 let hover = -1;
 let drawnCount = 0;
@@ -242,6 +247,8 @@ function draw() {
   ctx.clearRect(0, 0, W, H);
   drawnCount = 0;
   if (!data || !view || visibility <= 0) {
+    if (data && minimap && settings.minimap !== false && visibility <= 0) drawMinimap();
+    else if (nearby >= 0) setNearby(-1);
     updateHover();
     return;
   }
@@ -315,6 +322,99 @@ function draw() {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+}
+
+// Minimap (Weltansicht): Marker im Kreis oben links, kleiner, ohne Klicks.
+// Geometrie wie MinimapCore.GEOMETRY bei 1080p, skaliert mit der Höhe; Zoom (scale) meldet der Tracker.
+const MINIMAP = { cx: 168, cy: 125, radius: 98, iconScale: 0.6 };
+
+function drawMinimap() {
+  const u = uiScale();
+  const cx = MINIMAP.cx * u;
+  const cy = MINIMAP.cy * u;
+  const r = MINIMAP.radius * u;
+  const s = minimap.scale * u;
+  const size = Math.max(10, settings.markerSize * u * MINIMAP.iconScale);
+  const half = size / 2;
+  // Kartenpixel-Radius, in dem Marker überhaupt in den Kreis fallen können
+  const reach = (r + size) / s;
+  // „in der Nähe“: Kartenpixel (z13) zwischen Spielfigur und Marker, einstellbar (nearbyRadius)
+  const near = settings.nearbyRadius || 7;
+  const { x: mx, y: my, id: ids } = data.markers;
+  let closest = -1;
+  let closestD = Infinity;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  for (const t of enabled) {
+    const list = markersByType[t];
+    if (!list) continue;
+    const icon = iconBitmap(data.types[t].key);
+    for (const i of list) {
+      const dx = mx[i] - minimap.x;
+      const dy = my[i] - minimap.y;
+      if (Math.abs(dx) > reach || Math.abs(dy) > reach) continue;
+      const isFound = found.has(ids[i]);
+      if (isFound && settings.hideFound) continue;
+      const x = cx + dx * s;
+      const y = cy + dy * s;
+      const d = Math.hypot(dx, dy);
+      if (!isFound && d <= near && (closest < 0 || d < closestD)) {
+        closest = i;
+        closestD = d;
+      }
+      ctx.globalAlpha = settings.opacity * (isFound ? 0.35 : 1);
+      if (icon) ctx.drawImage(icon, Math.round(x - half), Math.round(y - size), Math.round(size), Math.round(size));
+      else {
+        ctx.fillStyle = '#d3bc8e';
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, half * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  // Marker in der Nähe: pulsierender Ring um das Symbol
+  if (closest >= 0) {
+    const x = cx + (mx[closest] - minimap.x) * s;
+    const y = cy + (my[closest] - minimap.y) * s - half;
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+    ctx.strokeStyle = '#ffe6b2';
+    ctx.globalAlpha = 0.55 + 0.45 * pulse;
+    ctx.lineWidth = 2 * u;
+    ctx.beginPath();
+    ctx.arc(x, y, half + (3 + 2 * pulse) * u, 0, Math.PI * 2);
+    ctx.stroke();
+    requestDraw();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  setNearby(closest);
+}
+
+// Hinweis rechts neben der Minimap + Nähe-Taste im Hauptprozess (nur solange etwas angeboten wird)
+function setNearby(index) {
+  if (index === nearby) return;
+  nearby = index;
+  api.nearby(index >= 0 ? data.markers.id[index] : null);
+  renderNearby();
+}
+
+function renderNearby() {
+  const el = $('nearby');
+  const done = performance.now() < nearbyDoneUntil;
+  el.classList.toggle('done', done);
+  if (nearby < 0 && !done) {
+    el.hidden = true;
+    return;
+  }
+  if (nearby >= 0) {
+    const type = data.types[data.markers.type[nearby]];
+    $('nearby-name').textContent = tt('ui.nearby', { name: type.name });
+    iconUrl(type.key).then((url) => { if (url) $('nearby-icon').src = url; });
+  }
+  $('nearby-action').textContent = done ? `✓ ${tt('ui.nearbyDone')}` : tt('ui.nearbyAction', { key: (settings.hotkeys || {}).markNearby || 'Alt+E' });
+  el.hidden = false;
 }
 
 function drawCheck(x, y, r) {
@@ -822,6 +922,7 @@ function renderSettings() {
   $('hide-found').checked = settings.hideFound;
   $('show-captures').checked = !!settings.showInCaptures;
   $('show-captures').closest('label').hidden = settings.captureProtection === false;
+  $('minimap').checked = settings.minimap !== false;
   $('opacity').value = Math.round(settings.opacity * 100);
   $('opacity-value').textContent = `${Math.round(settings.opacity * 100)} %`;
   $('size').value = settings.markerSize;
@@ -835,6 +936,7 @@ function renderSettings() {
     hk.togglePanel && `${hk.togglePanel} ${tt('ui.key.togglePanel')}`,
     hk.toggleFound && `${hk.toggleFound} ${tt('ui.key.toggleFound')}`,
     hk.cycleOpacity && `${hk.cycleOpacity} ${tt('ui.key.cycleOpacity')}`,
+    hk.markNearby && `${hk.markNearby} ${tt('ui.key.markNearby')}`,
   ].filter(Boolean).join(' · ');
   const errors = settings.hotkeyErrors || [];
   $('keys').textContent = errors.length ? `${keys} – ${tt('ui.keysUnavailable', { keys: errors.join(', ') })}` : keys;
@@ -870,6 +972,7 @@ $('profiles-settings').addEventListener('click', () => {
   api.openProfileSettings().then(result => { if (!result.ok) showToast(tt(result.error.messageKey)); }).catch(() => showToast(tt('progress.error.local-operation-failed')));
 });
 $('show-captures').addEventListener('change', (event) => api.saveSettings({ showInCaptures: event.target.checked }));
+$('minimap').addEventListener('change', (event) => api.saveSettings({ minimap: event.target.checked }));
 // --fill: Regler links vom Griff hell, rechts dunkel (overlay.css)
 function updateRangeFill(input) {
   const share = (Number(input.value) - Number(input.min)) / (Number(input.max) - Number(input.min));
@@ -1004,6 +1107,21 @@ api.on('view', (next) => {
   requestDraw();
 });
 
+api.on('minimap', (pos) => {
+  minimap = pos;
+  requestDraw();
+});
+api.on('nearby:mark', async (id) => {
+  if (!Number.isFinite(id) || found.has(id)) return;
+  const context = progressView.current().context;
+  if (!context) return;
+  await progressView.setFound(id, true);
+  const current = progressView.current();
+  if (current.context?.sessionGeneration !== context.sessionGeneration || current.context?.profileId !== context.profileId || !current.foundIds.includes(id)) return;
+  nearbyDoneUntil = performance.now() + 1500;
+  renderNearby();
+  setTimeout(renderNearby, 1600);
+});
 api.on('notice', showToast);
 api.on('panel:toggle', () => setPanel(!panelOpen));
 

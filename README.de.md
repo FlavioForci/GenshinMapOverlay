@@ -96,6 +96,7 @@ Einstellungen, Cache, Log und gefundene Marker liegen in `~/.config/Genshin Map 
 | **F8** | Marker-Panel auf/zu |
 | **F9** | Gefundene Marker ein-/ausblenden |
 | **F10** | Deckkraft der Marker wechseln |
+| **Alt+E** | Marker in der Nähe als gefunden markieren (nur solange der Hinweis neben der Minimap steht) |
 
 - **Linksklick auf einen Marker:** die Fundort-Karte zeigt Foto oder Video. Klick aufs Foto vergrößert es.
 - **Rechtsklick auf einen Marker:** als gefunden markieren (oder wieder offen).
@@ -127,6 +128,18 @@ wiederhergestellt. **Letzte gültige Sicherung wiederherstellen** ersetzt den lo
 durch den geprüften vorherigen Stand und erhält Originaldateien zur Wiederherstellung. Kann das Beenden
 eine Speicherung nicht abschließen, bleibt die App mit einer Fehlermeldung offen. Behebe das Speicherproblem
 und versuche erneut zu beenden.
+
+### Minimap
+
+- Nach dem Start des Overlays oder nach einem Teleport einmal mit **M** die Karte öffnen und wieder
+  schließen. Die Karte öffnet sich auf deine Figur zentriert, so weiß das Overlay, wo du bist, und zeigt
+  die angehakten Markerarten auch auf der Minimap.
+- Geh nah an einen Marker heran: Er bekommt einen Ring, und neben der Minimap erscheint ein Hinweis.
+  **Alt+E** markiert ihn als gefunden. Die Taste ist nur belegt, solange der Hinweis zu sehen ist.
+- Ausschalten im Panel oder im Tray-Menü (**Marker auf der Minimap**).
+- Geprüft mit 16:9-Auflösungen im Vollbild oder randlos. Im Fenstermodus oder bei anderen
+  Seitenverhältnissen (16:10, 21:9) erscheinen die Minimap-Marker eventuell noch nicht; die Marker auf
+  der Karte funktionieren überall.
 
 ## Ist das sicher für meinen Account?
 
@@ -164,6 +177,8 @@ Tray-Menü → **Erweitert** → **Einstellungsdatei öffnen**, danach **Einstel
 | `markerSize` | Markergröße in Pixeln bei 1080p (auch im Panel) |
 | `language` | `"de"` oder `"en"`; leer = aus dem Setup bzw. von Windows |
 | `showInCaptures` | `true` = Overlay ist in Screenshots, Aufnahmen und Streams zu sehen (auch im Panel) |
+| `minimap` | `false` = keine Marker auf der Minimap (auch im Panel und im Tray-Menü) |
+| `nearbyRadius` | Wie nah ein Marker für den Alt+E-Hinweis sein muss, in Kartenpixeln (Standard 7) |
 | `genshinPath` | Pfad zur `GenshinImpact.exe`, falls sie nicht automatisch gefunden wird |
 
 ## Datenschutz
