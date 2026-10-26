@@ -1,7 +1,7 @@
 /* global I18n */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else factory().mountSettings({ document: root.document, api: root.profileApi, I18n: root.I18n, window: root });
+  else factory().mountSettings({ document: root.document, api: root.profileApi, transferApi: root.transferApi, I18n: root.I18n, window: root });
 })(typeof window !== 'undefined' ? window : this, function () {
   'use strict';
 
@@ -11,7 +11,7 @@
   }
 
   /** Bind the production vanilla UI. All labels, including imported names, use textContent. */
-  function mountSettings({ document, api, I18n, window }) {
+  function mountSettings({ document, api, transferApi, I18n, window }) {
     const $ = id => document.getElementById(id);
     let language = 'en';
     let snapshot = null;
@@ -22,6 +22,13 @@
     let disposed = false;
     let editedProfile = null;
     const cleanups = [];
+    let providers = [];
+    let transferPreview = null;
+    let transferCounts = null;
+    let transferCoverage = null;
+    let transferDecisions = [];
+    let transferStatus = null;
+    const countKeys = ['matched', 'alreadyFound', 'ambiguous', 'unsupported', 'unknown', 'invalid', 'ignoredNotFound', 'duplicates'];
     const t = key => I18n.t(language, key);
 
     function listen(id, event, callback) {
@@ -45,6 +52,7 @@
       $('restore-local').disabled = busy || preparation !== null;
       $('status').textContent = statusKey ? t(statusKey) : recovery
         ? t('progress.error.' + snapshot.sync.code) : t(snapshot ? 'profiles.local' : 'profiles.loading');
+      renderTransfer();
       const selected = $('profiles').value;
       const options = [];
       for (const profile of snapshot?.profiles || []) {
@@ -67,6 +75,10 @@
     function apply(value) {
       if (disposed || !value || !Number.isSafeInteger(value.viewVersion)
         || (snapshot && value.viewVersion <= snapshot.viewVersion)) return;
+      if (snapshot && value.viewVersion > snapshot.viewVersion && transferPreview) {
+        transferPreview = null;
+        transferStatus = 'transfer.error.stale-preview';
+      }
       snapshot = value;
       statusKey = null;
       render();
@@ -125,6 +137,112 @@
       render();
     }
 
+    function renderTransfer() {
+      if (!transferApi) return;
+      const writable = snapshot?.sync.phase === 'local';
+      const disabled = busy || !writable || preparation !== null || !providers.length;
+      for (const id of ['transfer-source', 'transfer-destination', 'transfer-map', 'transfer-mode', 'transfer-name', 'transfer-region', 'transfer-preview', 'transfer-export', 'transfer-source-script', 'transfer-destination-script', 'transfer-prior']) $(id).disabled = disabled;
+      $('transfer-apply').disabled = disabled || !transferPreview?.canApply;
+      $('transfer-another').hidden = !transferPreview?.priorDestinations.length;
+      $('transfer-another').disabled = disabled || !transferPreview?.priorDestinations.length;
+      $('transfer-use-prior').hidden = !transferPreview?.priorDestinations.length;
+      $('transfer-use-prior').disabled = disabled || !transferPreview?.priorDestinations.length;
+      $('transfer-report').disabled = disabled || !transferPreview;
+      $('transfer-status').textContent = transferStatus ? t(transferStatus) : t('transfer.pending');
+      $('transfer-counts').textContent = transferCounts ? countKeys.map(key => t('transfer.count.' + key) + ': ' + transferCounts[key]).join(' · ') : '';
+      $('transfer-coverage').textContent = transferCoverage ? t(transferCoverage.complete ? 'transfer.complete' : 'transfer.partial') + ' · ' + t('transfer.categories') + ': ' + transferCoverage.categories.join(', ') + ' · ' + t('transfer.levels') + ': ' + transferCoverage.levels.join(', ') : '';
+      $('transfer-decisions').textContent = transferDecisions.map(row => row.sourceId + ': ' + row.reason).join('\n');
+      const reason = code => code ? t('transfer.reason.' + code) + ' (' + code + ')' : '';
+      $('transfer-capabilities').textContent = providers.map(provider => provider.provider + ' · ' + t('transfer.state.' + provider.status) + ' · ' + reason(provider.reasonCode) + '\n' + provider.variants.map(variant => '  ' + variant.id + ' · ' + variant.map + ' · ' + variant.accountTier + ' · ' + variant.browser.family + ' · ' + ['read', 'write', 'restore'].map(key => t('transfer.' + key) + ': ' + t('transfer.verification.' + variant[key])).join(' · ') + (variant.reasonCode ? ' · ' + reason(variant.reasonCode) : '')).join('\n')).join('\n\n');
+      $('transfer-prior').hidden = !transferPreview?.priorDestinations.length;
+      $('transfer-prior-label').hidden = !transferPreview?.priorDestinations.length;
+    }
+    function populateMaps() {
+      const provider = providers.find(row => row.provider === $('transfer-destination').value);
+      const options = [...new Set(provider?.variants.map(row => row.map) || [])].map(map => { const option = document.createElement('option'); option.value = map; option.textContent = map; return option; });
+      $('transfer-map').replaceChildren(...options); $('transfer-map').value = options[0]?.value || '';
+    }
+    function clearPreview() {
+      transferPreview = null; transferCounts = null; transferCoverage = null; transferDecisions = []; transferStatus = null; render();
+    }
+    function transferCommand(operation, options) {
+      if (disposed || busy || !snapshot || preparation !== null || !transferApi) return Promise.resolve(true);
+      pendingCommand = executeTransfer(operation, options);
+      return pendingCommand;
+    }
+    async function executeTransfer(operation, options) {
+      busy = true; transferStatus = null;
+      const captured = { sessionGeneration: snapshot.sessionGeneration, profileId: snapshot.activeProfile?.id };
+      if (operation === 'previewImport') clearPreview();
+      render();
+      try {
+        let result;
+        if (operation === 'saveScript') result = await transferApi.saveScript(options.provider, options.direction);
+        else if (operation === 'saveReport') result = await transferApi.saveReport(options.previewId);
+        else result = await transferApi[operation](captured, options);
+        if (disposed) return false;
+        // A snapshot can change while a native picker is open. Never re-enable an old token.
+        const sameContext = snapshot.sessionGeneration === captured.sessionGeneration && snapshot.activeProfile?.id === captured.profileId;
+        if (!sameContext && operation !== 'applyImport') { transferPreview = null; transferStatus = 'transfer.error.stale-context'; return false; }
+        const replySnapshot = result?.ok ? result.value?.snapshot : result?.snapshot;
+        if (replySnapshot && replySnapshot.viewVersion < snapshot.viewVersion) return result?.ok === true;
+        if (!result?.ok) {
+          transferPreview = null;
+          if (result?.validation) transferCounts = Object.fromEntries(countKeys.map(key => [key, key === 'invalid' ? result.validation.invalidCount : 0]));
+          if (result?.snapshot) apply(result.snapshot);
+          transferStatus = result?.error?.messageKey || 'transfer.error.local-operation-failed';
+          return false;
+        }
+        if (operation === 'previewImport') {
+          transferPreview = result.value;
+          transferCounts = result.value?.counts || null; transferCoverage = result.value?.coverage || null;
+          const prior = result.value?.priorDestinations || [];
+          $('transfer-prior').replaceChildren(...prior.map(profile => { const option = document.createElement('option'); option.value = profile.id; option.textContent = profile.name; return option; }));
+          $('transfer-prior').value = prior[0]?.id || '';
+        } else if (operation === 'applyImport') {
+          transferPreview = null;
+          apply(result.value.snapshot); transferCounts = result.value.receipt.counts; transferStatus = 'transfer.applied';
+        } else if (operation === 'exportProfile' && result.value) {
+          // Shared counts now describe the export; require a fresh import preview.
+          transferPreview = null;
+          transferCounts = result.value.counts; transferCoverage = result.value.coverage; transferDecisions = result.value.decisions; transferStatus = 'transfer.exported';
+        } else if (operation === 'saveScript' || operation === 'saveReport') transferStatus = 'transfer.saved';
+        return true;
+      } catch {
+        if (!disposed) { transferPreview = null; transferStatus = 'transfer.error.local-operation-failed'; }
+        return false;
+      } finally { busy = false; render(); }
+    }
+    let transferReady = Promise.resolve();
+    if (transferApi) {
+      $('transfer-mode').value = 'new';
+      listen('transfer-preview', 'click', () => {
+        const options = { provider: $('transfer-source').value, mode: $('transfer-mode').value };
+        options.name = $('transfer-name').value.trim() || t('transfer.importedName');
+        if ($('transfer-region').value) options.region = $('transfer-region').value;
+        return transferCommand('previewImport', options);
+      });
+      listen('transfer-apply', 'click', () => transferCommand('applyImport', { previewId: transferPreview?.id }));
+      listen('transfer-another', 'click', () => transferCommand('applyImport', { previewId: transferPreview?.id, createAnother: true }));
+      listen('transfer-use-prior', 'click', () => command('select', { profileId: $('transfer-prior').value }));
+      listen('transfer-export', 'click', () => transferCommand('exportProfile', { provider: $('transfer-destination').value, map: $('transfer-map').value }));
+      listen('transfer-source-script', 'click', () => transferCommand('saveScript', { provider: $('transfer-source').value, direction: 'export' }));
+      listen('transfer-destination-script', 'click', () => transferCommand('saveScript', { provider: $('transfer-destination').value, direction: 'import' }));
+      listen('transfer-report', 'click', () => transferCommand('saveReport', { previewId: transferPreview?.id }));
+      for (const id of ['transfer-source', 'transfer-mode', 'transfer-name', 'transfer-region']) listen(id, 'change', clearPreview);
+      listen('transfer-destination', 'change', () => { populateMaps(); render(); });
+      transferReady = transferApi.providers().then(values => {
+        if (disposed) return;
+        if (!Array.isArray(values)) throw new Error('invalid-providers');
+        providers = values;
+        for (const id of ['transfer-source', 'transfer-destination']) {
+          const options = providers.map(provider => { const option = document.createElement('option'); option.value = provider.provider; option.textContent = provider.provider; return option; });
+          $(id).replaceChildren(...options); $(id).value = options[0]?.value || '';
+        }
+        populateMaps(); render();
+      }).catch(() => { if (!disposed) { transferStatus = 'transfer.error.local-operation-failed'; render(); } });
+    }
+
     function fields() {
       const name = $('name').value;
       const region = $('region').value;
@@ -176,10 +294,11 @@
       if (disposed) return;
       disposed = true;
       cleanups.splice(0).forEach(clean => clean());
-      if (window) window.removeEventListener('beforeunload', dispose);
+      if (window) window.removeEventListener('pagehide', dispose);
     }
-    if (window) window.addEventListener('beforeunload', dispose, { once: true });
-    return { ready, command, dispose, prepareQuit, resumeAfterQuit };
+    // beforeunload can precede a navigation canceled by main; clean up only on exit.
+    if (window) window.addEventListener('pagehide', dispose, { once: true });
+    return { ready: Promise.all([ready, transferReady]), command, dispose, prepareQuit, resumeAfterQuit };
   }
 
   return { mountSettings, validateProfileText };

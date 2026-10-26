@@ -55,7 +55,7 @@ function makeBrowserHarness({ provider, foundIds = [], failures = {} }) {
   };
   const envelope = () => makeTransfer({ provider, map: context.map, catalog: { generation: 'synthetic-harness', fingerprint: context.catalogFingerprint }, records: [...found].sort().map(id => ({ id, map: context.map, category: null, level: null, state: true, position: null })) });
   const adapter = {
-    capability, pacing: variant.pacing,
+    capability, variantId: variant.id, pacing: variant.pacing,
     async detect() { return structuredClone(context); },
     async read(captured) { check(captured); const foundIds = [...found].sort(); return { foundIds, fingerprint: fingerprint(foundIds), catalogIds: [...catalogIds] }; },
     async exportProgress(captured) { check(captured); return envelope(); },
@@ -90,4 +90,25 @@ function makeBrowserHarness({ provider, foundIds = [], failures = {} }) {
   };
 }
 
-module.exports = { fixture, makeTransfer, makeBrowserHarness };
+/** Minimal eventful DOM for testing our UI's controls and text rendering, not browser layout. */
+function makeDocument() {
+  const nodes = [];
+  function element(tagName) {
+    const handlers = new Map(); let ownText = '';
+    const node = {
+      tagName, children: [], parentNode: null, disabled: false, checked: false, files: [], style: {},
+      set textContent(value) { ownText = String(value); this.children = []; },
+      get textContent() { return ownText + this.children.map(child => child.textContent).join(''); },
+      appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+      setAttribute(key, value) { this[key] = value; },
+      addEventListener(type, callback) { if (!handlers.has(type)) handlers.set(type, new Set()); handlers.get(type).add(callback); },
+      removeEventListener(type, callback) { handlers.get(type)?.delete(callback); },
+      dispatch(type) { if (this.disabled) return; for (const callback of handlers.get(type) || []) callback({ target: this }); },
+      click() { this.dispatch('click'); },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; },
+    };
+    nodes.push(node); return node;
+  }
+  return { createElement: element, body: element('body'), find: (tag, text, type) => nodes.find(n => n.tagName === tag && (text === null || n.textContent === text) && (!type || n.type === type)) };
+}
+module.exports = { fixture, makeTransfer, makeBrowserHarness, makeDocument };

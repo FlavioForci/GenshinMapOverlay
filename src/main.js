@@ -12,6 +12,8 @@ const I18n = require('./shared/i18n');
 const { DataStore } = require('./data/store');
 const { createProgressRuntime } = require('./progress/runtime');
 const { registerProgressIpc } = require('./progress/ipc');
+const { createTransferRuntime } = require('./transfer/runtime');
+const { canonicalCatalog } = require('./transfer/catalog');
 const { createQuitGuard, createRendererQuitDrain } = require('./progress/app-lifecycle');
 const { createClientProgressBarrier } = require('./progress/client-barrier');
 const { createSettingsWindow, createSettingsWindowOwner } = require('./settings/window');
@@ -31,6 +33,8 @@ let store;
 let progressRuntime;
 let progressInitialization;
 let disposeProgressIpc;
+let transferRuntime;
+let transferCatalog = null;
 const settingsOwner = createSettingsWindowOwner({
   createWindow: onClosed => createSettingsWindow({ BrowserWindow, onClosed, getLanguage: () => lang }),
 });
@@ -145,6 +149,7 @@ const quitGuard = createQuitGuard({
     timers.forEach(timer => clearInterval(timer));
     clearTimeout(saveTimer);
     if (disposeProgressIpc) disposeProgressIpc();
+    if (transferRuntime) transferRuntime.dispose();
     progressBarrier.dispose();
   },
   onError: () => {
@@ -188,6 +193,11 @@ async function start() {
     openSettings: openProfileSettings, dialogs: dialog,
     retryLocal: () => progressRuntime.retryLocal(),
     withProgressBarrier: operation => progressBarrier.run(operation),
+  });
+  transferRuntime = createTransferRuntime({
+    progress: progressRuntime.service, getCatalog: () => transferCatalog,
+    getSettingsWindow: () => localProgressWindow(settingsOwner.current(), SETTINGS_DOCUMENT) ? settingsOwner.current() : null,
+    ipcMain, dialogs: dialog, withProgressBarrier: operation => progressBarrier.run(operation),
   });
   state.isAdmin = isAdmin();
   log(`start: Version ${app.getVersion()}, Electron ${process.versions.electron}, Sprache ${lang}, Admin ${state.isAdmin}, Bildschirme ${screen.getAllDisplays().map((d) => `${d.id}:${d.size.width}x${d.size.height}@${d.scaleFactor}`).join(' ')}`);
@@ -235,7 +245,15 @@ function checkScreenPermission() {
 
 async function loadMarkerData(force) {
   try {
-    markerData = await store.loadMarkers({ force, lang });
+    const loaded = await store.loadMarkers({ force, lang });
+    // Build after data loads, never per transfer request. Semantic fingerprints
+    // ignore translated labels; raw marker levels are not verified floors.
+    if (loaded !== markerData) {
+      const catalog = canonicalCatalog(loaded);
+      if (transferCatalog?.fingerprint !== catalog.fingerprint) transferRuntime?.controller.invalidatePreview();
+      transferCatalog = catalog;
+    }
+    markerData = loaded;
     sendToOverlay('data:markers', markerData);
     if (force) notify(tr('notice.dataUpdated'));
   } catch (err) {

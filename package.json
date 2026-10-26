@@ -10,6 +10,8 @@
     "start": "electron .",
     "test:match": "node tools/match-test.js",
     "test:progress": "node --test \"tests/progress/*.test.js\"",
+    "build:transfer-scripts": "node tools/build-transfer-scripts.js",
+    "check:transfer-package": "node tools/check-transfer-package.js",
     "test:transfer": "node --test \"tests/transfer/*.test.js\"",
     "dist": "electron-builder --win nsis",
     "data:build": "node server/tools/build-data.js",
@@ -30,7 +32,8 @@
       "src/**/*",
       "assets/**/*",
       "node_modules/@techstark/opencv-js/dist/opencv.js",
-      "package.json"
+      "package.json",
+      "docs/map-transfers.md"
     ],
     "win": {
       "target": [

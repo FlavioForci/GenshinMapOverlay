@@ -19,3 +19,13 @@ contextBridge.exposeInMainWorld('profileApi', {
   onResumeAfterQuit: callback => subscribe('progress:resume-after-quit', callback),
   quitReady: payload => ipcRenderer.send('progress:quit-ready', payload),
 });
+
+// Fixed transfer intents only. Main chooses/owns every path, file and script.
+contextBridge.exposeInMainWorld('transferApi', {
+  providers: () => ipcRenderer.invoke('transfer:providers'),
+  previewImport: (context, options) => ipcRenderer.invoke('transfer:previewImport', context, options),
+  applyImport: (context, options) => ipcRenderer.invoke('transfer:applyImport', context, options),
+  exportProfile: (context, options) => ipcRenderer.invoke('transfer:exportProfile', context, options),
+  saveScript: (provider, direction) => ipcRenderer.invoke('transfer:saveScript', provider, direction),
+  saveReport: previewId => ipcRenderer.invoke('transfer:saveReport', previewId),
+});

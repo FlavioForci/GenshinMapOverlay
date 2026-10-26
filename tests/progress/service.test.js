@@ -11,13 +11,13 @@ const { ACTOR_A } = require('./helpers');
 const local = { kind: 'local' };
 const context = service => ({ sessionGeneration: service.snapshot().sessionGeneration, profileId: service.snapshot().activeProfile.id });
 const generation = service => ({ sessionGeneration: service.snapshot().sessionGeneration });
-async function setup(t, { adapter = fs, onSnapshot } = {}) {
+async function setup(t, { adapter = fs, onSnapshot, publicationGate } = {}) {
   const userData = await fs.mkdtemp(path.join(os.tmpdir(), 'progress-service-'));
   t.after(() => fs.rm(userData, { recursive: true, force: true }));
   const root = path.join(userData, 'progress');
   const repository = new ProgressRepository({ root, uuid: () => ACTOR_A, fs: adapter });
   let sequence = 0;
-  const service = new ProgressService({ repository, uuid: () => `20000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`, onSnapshot });
+  const service = new ProgressService({ repository, uuid: () => `20000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}`, onSnapshot, publicationGate });
   return { userData, root, repository, service };
 }
 async function ready(t, options) { const f = await setup(t, options); await f.service.initialize({ userData: f.userData }); return f; }
@@ -146,19 +146,26 @@ test('import archives before mutation, keeps existing false registers and create
   assert.ok((await fs.readdir(path.join(f.root, 'backups'))).some(name => name.startsWith('local-import-')));
 });
 
-test('backup failure wholly prevents import and extension callback execution', async t => {
-  let fail = false;
-  const f = await ready(t, { adapter: { ...fs, rename: async (source, target) => {
+test('backup failure leaves staged import invisible and primary/last-good/revision unchanged', async t => {
+  let fail = false; const seen = []; const notifications = [];
+  const f = await ready(t, { onSnapshot: snapshot => seen.push(snapshot), publicationGate: { pause: async () => () => {}, notifyCommitted: revision => notifications.push(revision) }, adapter: { ...fs, rename: async (source, target) => {
     if (fail && /local-import-/.test(target)) throw Object.assign(Error('backup failed'), { code: 'EIO' });
     return fs.rename(source, target);
   } } });
   const before = await f.repository.load(local);
   const backup = await f.service.exportBackup({ ...generation(f.service), profileIds: [context(f.service).profileId] });
+  const primary = await fs.readFile(path.join(f.root, 'local/state.json'), 'utf8');
+  const lastGood = await fs.readFile(path.join(f.root, 'local/state.last-good.json'), 'utf8');
+  const snapshot = f.service.snapshot(); seen.length = 0;
   fail = true;
   assert.equal((await f.service.importBackup({ ...generation(f.service), bytes: Buffer.from(backup.value) })).error.code, 'local-backup-failed');
-  let called = false;
-  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'restore' }, () => { called = true; }), { code: 'local-backup-failed' });
-  assert.equal(called, false); assert.deepEqual(await f.repository.load(local), before);
+  let preparations = 0;
+  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'restore' }, (draft, actor) => { preparations++; setFound(draft, { profileId: context(f.service).profileId, id: 42, found: true }, actor); }), { code: 'local-backup-failed' });
+  assert.equal(preparations, 1); assert.deepEqual(await f.repository.load(local), before);
+  assert.equal(await fs.readFile(path.join(f.root, 'local/state.json'), 'utf8'), primary);
+  assert.equal(await fs.readFile(path.join(f.root, 'local/state.last-good.json'), 'utf8'), lastGood);
+  assert.ok(seen.every(value => JSON.stringify(value.activeProfile) === JSON.stringify(snapshot.activeProfile)));
+  assert.deepEqual(notifications, []);
 });
 
 test('internal transaction checks revision, commits bulk once and rejects async callbacks', async t => {
@@ -461,4 +468,85 @@ test('invalid local attachment edits fail before publication and preserve canoni
   }), { code: 'invalid-envelope' });
   assert.deepEqual(await f.repository.load(local), before);
   assert.equal(f.service.snapshot().viewVersion, viewVersion);
+});
+
+
+test('main-only transfer read is detached, queued, validated and obeys context/recovery/closing', async t => {
+  const f = await ready(t); const ctx = context(f.service);
+  const editing = f.service.setFound(ctx, { id: 42, found: true });
+  const reading = f.service.readTransferState(ctx); await editing; const read = await reading;
+  assert.equal(read.envelope.state.profiles[ctx.profileId].markers['42'].value, true);
+  assert.deepEqual(read.profile, read.envelope.state.profiles[ctx.profileId]); read.profile.markers['42'].value = false;
+  assert.equal((await f.service.readTransferState(ctx)).profile.markers['42'].value, true);
+  await assert.rejects(f.service.readTransferState({ ...ctx, sessionGeneration: 'old' }), { code: 'stale-context' });
+  await fs.writeFile(path.join(f.root, 'local/state.json'), '{broken'); await f.service.initialize({ userData: f.userData });
+  await assert.rejects(f.service.readTransferState(context(f.service)), { code: 'local-recovery-required' });
+  await f.service.shutdown(); await assert.rejects(f.service.readTransferState(context(f.service)), { code: 'service-closed' });
+});
+
+test('publication gate surrounds backup/persistence/snapshot and only notifies canonical commits after release', async t => {
+  const events = [];
+  const f = await ready(t, { onSnapshot: () => events.push('snapshot'), publicationGate: { pause: async () => { events.push('pause'); return () => events.push('release'); }, notifyCommitted: () => events.push('notify') } });
+  const backup = f.repository.backup.bind(f.repository); f.repository.backup = async (...args) => { events.push('backup'); return backup(...args); };
+  const transact = f.repository.transact.bind(f.repository); f.repository.transact = async (...args) => { const after = await transact(...args); events.push('persist'); return after; };
+  events.length = 0;
+  await f.service.runProfileTransaction(context(f.service), { reason: 'import' }, (draft, actor) => setFound(draft, { profileId: context(f.service).profileId, id: 42, found: true }, actor));
+  assert.deepEqual(events, ['pause', 'backup', 'persist', 'snapshot', 'release', 'notify']);
+  events.length = 0;
+  await f.service.runProfileTransaction(context(f.service), { reason: 'import' }, draft => { draft.extensions = { transfer: { version: 1, profiles: {} } }; });
+  assert.equal(events.includes('notify'), false);
+});
+
+test('invalid import drafts fail aggregate validation before backup is written', async t => {
+  const f = await ready(t); const before = await f.repository.load(local); const archives = await fs.readdir(path.join(f.root, 'backups'));
+  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'import' }, draft => { draft.extensions = { transfer: { version: 1, profiles: { forged: {} } } }; }), { code: 'invalid-envelope' });
+  assert.deepEqual(await fs.readdir(path.join(f.root, 'backups')), archives); assert.deepEqual(await f.repository.load(local), before);
+});
+
+test('restore holds publication gate through durable restore and activation snapshot', async t => {
+  const events = [];
+  const f = await ready(t, { onSnapshot: () => events.push('snapshot'), publicationGate: { pause: async () => { events.push('pause'); return () => events.push('release'); }, notifyCommitted: () => events.push('notify') } });
+  await f.service.setFound(context(f.service), { id: 42, found: true }); await f.service.setFound(context(f.service), { id: 43, found: true });
+  const restore = f.repository.restoreLastGood.bind(f.repository); f.repository.restoreLastGood = async (...args) => { const after = await restore(...args); events.push('restore'); return after; };
+  events.length = 0;
+  assert.equal((await f.service.restoreLocalBackup(generation(f.service))).ok, true);
+  assert.deepEqual(events, ['pause', 'restore', 'snapshot', 'release', 'notify']);
+  assert.deepEqual(f.service.snapshot().activeProfile.foundIds, [42]);
+});
+
+
+test('final main-only guard runs after backup, once, and prevents staged installation', async t => {
+  const f = await ready(t); const before = await f.repository.load(local); let prepared = 0; let guarded = 0; let backedUp = false;
+  const backup = f.repository.backup.bind(f.repository); f.repository.backup = async (...args) => { await backup(...args); backedUp = true; };
+  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'import' }, (draft, actor) => {
+    prepared++; setFound(draft, { profileId: context(f.service).profileId, id: 42, found: true }, actor);
+  }, () => { guarded++; assert.equal(backedUp, true); throw new (require('../../src/progress/schema').ProgressError)('stale-preview'); }), { code: 'stale-preview' });
+  assert.equal(prepared, 1); assert.equal(guarded, 1); assert.deepEqual(await f.repository.load(local), before);
+  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'import' }, () => {}, async () => {}), { code: 'invalid-mutation' });
+  assert.deepEqual(await f.repository.load(local), before);
+});
+
+test('staged transactions preserve deliberate removal of optional local attachments', async t => {
+  const f = await ready(t); const ctx = context(f.service);
+  await f.service.runProfileTransaction(ctx, { reason: 'import' }, draft => { draft.extensions = { transfer: { version: 1, profiles: { [ctx.profileId]: localTransfer() } } }; });
+  const before = await f.repository.load(local);
+  const after = await f.service.runProfileTransaction(ctx, { reason: 'import' }, draft => { delete draft.extensions; });
+  assert.equal(Object.hasOwn(after, 'extensions'), false); assert.equal(after.revision, before.revision + 1);
+});
+
+test('final guard rejects a base revision changed during backup before staged installation', async t => {
+  const f = await ready(t); const ctx = context(f.service); const before = await f.repository.load(local); let guards = 0;
+  const backup = f.repository.backup.bind(f.repository); f.repository.backup = async (...args) => {
+    await backup(...args); await f.repository.transact(local, draft => setFound(draft, { profileId: ctx.profileId, id: 99, found: true }, ACTOR_A));
+  };
+  await assert.rejects(f.service.runProfileTransaction(ctx, { reason: 'import', expectedRevision: before.revision }, (draft, actor) => setFound(draft, { profileId: ctx.profileId, id: 42, found: true }, actor), () => { guards++; }), { code: 'revision-conflict' });
+  const durable = await f.repository.load(local);
+  assert.equal(guards, 0); assert.equal(durable.state.profiles[ctx.profileId].markers['42'], undefined);
+  assert.equal(durable.state.profiles[ctx.profileId].markers['99'].value, true);
+});
+
+test('raw final guard exceptions are sanitized without leaking private text or changing disk', async t => {
+  const f = await ready(t); const before = await f.repository.load(local);
+  await assert.rejects(f.service.runProfileTransaction(context(f.service), { reason: 'import' }, () => {}, () => { throw Error('synthetic-private-error-text'); }), error => error.code === 'local-operation-failed' && error.message === 'local-operation-failed');
+  assert.deepEqual(await f.repository.load(local), before);
 });

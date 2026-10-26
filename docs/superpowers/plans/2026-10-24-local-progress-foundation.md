@@ -280,4 +280,4 @@ Self-review coverage: register/undo and bounds → Task 1; durability/recovery �
 
 ## Execution status (2026-10-25)
 
-Subagent-driven execution on local branch `import-export`. Tasks 1–4 passed independent task reviews; per-task commit instructions are grouped into milestone commits at the user’s request. Implementation currently uses the original writable checkout after the managed worktree was blocked by the sandbox. Remaining tasks are tracked in the SDD ledger.
+Subagent-driven execution on local branch `import-export`. Tasks 1–7 passed independent task reviews; per-task commit instructions are grouped into milestone commits at the user’s request. Implementation currently uses the original writable checkout after the managed worktree was blocked by the sandbox. Remaining tasks are tracked in the SDD ledger.

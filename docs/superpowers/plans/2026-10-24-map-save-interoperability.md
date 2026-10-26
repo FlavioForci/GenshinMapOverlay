@@ -461,3 +461,7 @@ Coverage: feasibility/order/variants → Tasks 1, 7–11; envelope validation/re
 Site methods, endpoint names, native save versions, coordinate coefficients, matching tolerances and provider pacing are measured outputs of explicit feasibility/adapter steps. None is a promised capability or an invented placeholder. Access-dependent work remains a gate if evidence cannot be obtained; five working integrations cannot be claimed from offline fixtures.
 
 Recommended execution: **Subagent-driven**, because the six prerequisite tasks and twelve transfer tasks cross persistence, matching and externally persisted writes, and each boundary benefits from independent review. **Native** remains a lower-cost option when sequential implementation is preferred. Review both linked plans and choose the execution method before implementation.
+
+## Execution status (2026-10-26)
+
+Offline portions of Tasks1–6 are implemented and independently reviewed on local branch `import-export`, reusing the completed local foundation. Temporary-data native settings/file-transfer checks passed with stubbed pickers; live website checks remain pending at the user's explicit request. All five providers remain planned/unavailable and bundled scripts stop before reading/writing a site save. Actual adapter/mapping/persistence work in Tasks7–11 is open; independent documentation/package/core verification continues in Task12. No five-provider completion or release claim follows from synthetic tests.

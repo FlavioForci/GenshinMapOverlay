@@ -2,7 +2,8 @@
 
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { ProgressError } = require('./schema');
+const { ProgressError, validateEnvelope } = require('./schema');
+const { isDeepStrictEqual } = require('node:util');
 const { foundIds } = require('./merge');
 const { migrateLegacy } = require('./migration');
 const commands = require('./profiles');
@@ -14,7 +15,7 @@ const SAFE_CODES = new Set([
   'invalid-clock', 'clock-exhausted', 'revision-exhausted', 'invalid-envelope', 'invalid-state', 'invalid-mutation',
   'local-recovery-required', 'local-read-failed', 'local-write-failed', 'local-backup-failed', 'local-durability-uncertain',
   'invalid-installation', 'unsupported-scope', 'invalid-scope', 'stale-context', 'revision-conflict', 'service-closed',
-  'not-initialized', 'local-operation-failed',
+  'not-initialized', 'local-operation-failed', 'stale-preview',
 ]);
 const DISK_CODES = new Set(['local-recovery-required', 'local-read-failed', 'local-write-failed', 'local-backup-failed', 'local-durability-uncertain', 'unsupported-version']);
 function fail(code) { throw new ProgressError(code); }
@@ -42,8 +43,15 @@ function copyPatch(value, required, optional = []) { input(value, required, opti
  * displayed profile. Only initialize retry or explicit restore can clear it.
  */
 class ProgressService {
-  constructor({ repository, uuid = randomUUID, onSnapshot = () => {} }) {
+  /** Optional main-only publicationGate.pause() must prevent new publication/local
+   * merge critical sections until its synchronous release callback runs. It must
+   * never wait for a remote HTTP response. Local mode requires no gate.
+   * notifyCommitted(revision) is advisory and receives no local attachments.
+   */
+  constructor({ repository, uuid = randomUUID, onSnapshot = () => {}, publicationGate = null }) {
     if (!repository || typeof uuid !== 'function' || typeof onSnapshot !== 'function') fail('invalid-command');
+    if (publicationGate !== null && (typeof publicationGate.pause !== 'function' || typeof publicationGate.notifyCommitted !== 'function')) fail('invalid-command');
+    this.publicationGate = publicationGate;
     this.repository = repository;
     this.uuid = uuid;
     this.onSnapshot = onSnapshot;
@@ -181,35 +189,106 @@ class ProgressService {
     });
   }
 
-  async _transaction(context, options, mutate) {
+  async _publication(operation) {
+    const release = this.publicationGate ? await this.publicationGate.pause() : () => {};
+    let committed;
+    try { committed = await operation(); }
+    finally { release(); }
+    // Notification is advisory; a subscriber failure cannot undo a durable commit.
+    if (committed.canonicalChanged && this.publicationGate) {
+      try { this.publicationGate.notifyCommitted(committed.after.revision); } catch { /* durable */ }
+    }
+    return committed.after;
+  }
+
+  async _transaction(context, options, mutate, beforeCommit) {
     this._context(context, 'active'); this._writable();
     input(options, ['reason'], ['expectedRevision']);
+    if (beforeCommit !== undefined && typeof beforeCommit !== 'function') fail('invalid-command');
     if (!['edit', 'import', 'restore'].includes(options.reason) || typeof mutate !== 'function') fail('invalid-command');
     if (Object.hasOwn(options, 'expectedRevision') && (!Number.isSafeInteger(options.expectedRevision) || options.expectedRevision < 0)) fail('invalid-command');
-    if (Object.hasOwn(options, 'expectedRevision')) {
+    const execute = async () => {
       const before = await this.repository.load(LOCAL);
-      if (before.revision !== options.expectedRevision) fail('revision-conflict');
-    }
-    if (options.reason !== 'edit') await this.repository.backup(LOCAL, 'import');
-    const after = await this.repository.transact(LOCAL, draft => {
       this._context(context, 'active');
-      if (Object.hasOwn(options, 'expectedRevision') && draft.revision !== options.expectedRevision) fail('revision-conflict');
-      return mutate(draft, this.actor);
+      if (before.selectedProfileId !== context.profileId) fail('stale-context');
+      if (Object.hasOwn(options, 'expectedRevision') && before.revision !== options.expectedRevision) fail('revision-conflict');
+      let staged;
+      if (options.reason !== 'edit') {
+        staged = structuredClone(before);
+        const returned = mutate(staged, this.actor);
+        if (returned !== undefined) {
+          if (returned && typeof returned.then === 'function') Promise.resolve(returned).catch(() => {});
+          fail('invalid-mutation');
+        }
+        if (staged.revision !== before.revision) fail('invalid-envelope');
+        // Validate the complete next serialized envelope before even writing the backup.
+        const changed = !isDeepStrictEqual(staged, before);
+        if (changed && before.revision === Number.MAX_SAFE_INTEGER) fail('revision-exhausted');
+        staged = validateEnvelope({ ...staged, revision: before.revision + (changed ? 1 : 0) }, LOCAL);
+        staged.revision = before.revision;
+        await this.repository.backup(LOCAL, 'import');
+      }
+      const after = await this.repository.transact(LOCAL, draft => {
+        this._context(context, 'active');
+        if (draft.revision !== before.revision) fail('revision-conflict');
+        if (beforeCommit) {
+          const returned = beforeCommit();
+          if (returned !== undefined) {
+            if (returned && typeof returned.then === 'function') Promise.resolve(returned).catch(() => {});
+            fail('invalid-mutation');
+          }
+        }
+        if (staged) {
+          for (const key of Object.keys(draft)) if (!Object.hasOwn(staged, key)) delete draft[key];
+          Object.assign(draft, staged);
+        }
+        else return mutate(draft, this.actor);
+      });
+      this._adopt(after);
+      return { after, canonicalChanged: !isDeepStrictEqual(before.state, after.state) };
+    };
+    return options.reason === 'edit' ? (await execute()).after : this._publication(execute);
+  }
+
+  /** Queued main-only transfer read. Never expose this envelope/register/attachment
+   * data through IPC. Returns detached validated current disk state under Context;
+   * rejects on stale context, recovery or closing, like internal transactions.
+   * @param {Context} context
+   * @returns {Promise<{envelope:import('./schema').LocalEnvelope,profile:import('./schema').Profile}>}
+   */
+  readTransferState(context) {
+    let captured; let invalid;
+    try {
+      if (this.closing) fail('service-closed');
+      this._context(context, 'active'); captured = { ...context };
+    } catch (error) { invalid = error; }
+    return this._enqueue(async () => {
+      try {
+        if (invalid) throw invalid;
+        this._context(captured, 'active'); this._writable();
+        const envelope = await this.repository.load(LOCAL);
+        if (envelope.selectedProfileId !== captured.profileId) fail('stale-context');
+        return { envelope, profile: structuredClone(envelope.state.profiles[captured.profileId]) };
+      } catch (error) { await this._failure(error); throw safeError(error); }
     });
-    this._adopt(after);
-    return after;
   }
 
   /**
    * Internal main-process extension point. One synchronous void callback commits
-   * canonical state and future local attachments atomically. Never expose this
-   * method through IPC. Import/restore reasons archive current state first.
+   * canonical state and local attachments atomically. Never expose through IPC.
+   * Import/restore first stage and fully validate a detached draft, then archive,
+   * then install it in one repository transaction. The trusted draft callback may
+   * run even if backup later fails: it MUST have no external side effects.
+   * Optional beforeCommit is a synchronous void main-only compatibility guard,
+   * called once after backup, inside the final revision/context-checked repository
+   * callback, before staged state is installed. Neither callback may be async.
    * @param {Context} context
    * @param {{expectedRevision?:number,reason:'edit'|'import'|'restore'}} options
    * @param {(draft:import('./schema').LocalEnvelope,actor:string)=>void} mutate
+   * @param {()=>void} [beforeCommit]
    * @returns {Promise<import('./schema').LocalEnvelope>}
    */
-  runProfileTransaction(context, options, mutate) {
+  runProfileTransaction(context, options, mutate, beforeCommit) {
     let captured; let copied; let invalid;
     try {
       if (this.closing) fail('service-closed');
@@ -217,7 +296,7 @@ class ProgressService {
       copied = copyPatch(options, ['reason'], ['expectedRevision']);
     } catch (error) { invalid = error; }
     return this._enqueue(async () => {
-      try { if (invalid) throw invalid; return await this._transaction(captured, copied, mutate); }
+      try { if (invalid) throw invalid; return await this._transaction(captured, copied, mutate, beforeCommit); }
       catch (error) { await this._failure(error); throw safeError(error); }
     });
   }
@@ -303,20 +382,24 @@ class ProgressService {
       if (!this.userData) fail('not-initialized');
       this.actor = (await this.repository.init()).writerId;
       this._context(ctx, 'generation');
-      let after;
-      try {
-        after = await this.repository.restoreLastGood(LOCAL);
-        this.pendingRestoreActivation = true;
-      } catch (error) {
-        // Replacement may already have happened. Carry the restore activation
-        // through immediate or later durability reconciliation, even if its
-        // selected profile ID matches the old one. Never clear it on a failed
-        // read/sync; only adopting usable durable state consumes this intent.
-        if (error.code === 'local-durability-uncertain') this.pendingRestoreActivation = true;
-        throw error;
-      }
-      if (!after.migrationComplete) after = await migrateLegacy({ repository: this.repository, userData: this.userData, uuid: () => this._uuid() });
-      this._adopt(after, true);
+      await this._publication(async () => {
+        const beforeState = this.envelope?.state;
+        let after;
+        try {
+          after = await this.repository.restoreLastGood(LOCAL);
+          this.pendingRestoreActivation = true;
+        } catch (error) {
+          // Replacement may already have happened. Carry the restore activation
+          // through immediate or later durability reconciliation, even if its
+          // selected profile ID matches the old one. Never clear it on a failed
+          // read/sync; only adopting usable durable state consumes this intent.
+          if (error.code === 'local-durability-uncertain') this.pendingRestoreActivation = true;
+          throw error;
+        }
+        if (!after.migrationComplete) after = await migrateLegacy({ repository: this.repository, userData: this.userData, uuid: () => this._uuid() });
+        this._adopt(after, true);
+        return { after, canonicalChanged: !isDeepStrictEqual(beforeState, after.state) };
+      });
       return this.snapshot();
     }, true);
   }
