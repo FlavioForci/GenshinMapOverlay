@@ -8,3 +8,4 @@ server/.wrangler/
 testbilder/
 reddit-post.md
 server/tools/import-*.js
+.DS_Store
