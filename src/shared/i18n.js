@@ -30,6 +30,8 @@
       'notice.helperActive': 'Tasten im Spiel aktiv',
       'notice.helperActivePartial': 'Tasten im Spiel aktiv – nicht verfügbar: {keys}',
       'notice.macScreenPermission': 'macOS: Bildschirmaufnahme für „Genshin Map Overlay“ erlauben (Systemeinstellungen → Datenschutz & Sicherheit → Bildschirmaufnahme), dann das Overlay neu starten.',
+      'notice.linuxWayland': 'Linux: Das Overlay läuft unter reinem Wayland – Position, „immer oben“, Klicks und Tasten gehen dort oft nicht. Besser mit XWayland (X11) starten.',
+      'notice.linuxPortal': 'Wayland: Im Systemdialog den Bildschirm mit dem Spiel freigeben.',
       'notice.adminCapture': 'Das Overlay läuft als Administrator – so startet Windows keine Bildschirmaufnahme. Bitte normal starten.',
       'notice.hotkeysTaken': 'Belegt oder ungültig: {keys} – in den Einstellungen ändern',
 
@@ -50,6 +52,7 @@
       'tray.hotkeysEnabled': 'Hotkeys aktiv',
       'tray.helperStart': 'Tasten im Spiel aktivieren (Admin-Helfer)',
       'tray.autostart': 'Mit Windows starten',
+      'tray.autostartLogin': 'Beim Anmelden starten',
       'tray.advanced': 'Erweitert',
       'tray.language': 'Sprache / Language',
       'tray.openSettings': 'Einstellungsdatei öffnen',
@@ -131,6 +134,8 @@
       'notice.helperActive': 'Hotkeys active in game',
       'notice.helperActivePartial': 'Hotkeys active in game – unavailable: {keys}',
       'notice.macScreenPermission': 'macOS: allow Screen Recording for “Genshin Map Overlay” (System Settings → Privacy & Security → Screen Recording), then restart the overlay.',
+      'notice.linuxWayland': 'Linux: the overlay is running on native Wayland – position, always-on-top, clicks and hotkeys often don’t work there. Better start it with XWayland (X11).',
+      'notice.linuxPortal': 'Wayland: share the screen with the game in the system dialog.',
       'notice.adminCapture': 'The overlay is running as administrator – Windows won’t start screen capture that way. Please start it normally.',
       'notice.hotkeysTaken': 'Taken or invalid: {keys} – change them in the settings',
 
@@ -151,6 +156,7 @@
       'tray.hotkeysEnabled': 'Hotkeys enabled',
       'tray.helperStart': 'Enable hotkeys in game (admin helper)',
       'tray.autostart': 'Start with Windows',
+      'tray.autostartLogin': 'Start on login',
       'tray.advanced': 'Advanced',
       'tray.language': 'Language / Sprache',
       'tray.openSettings': 'Open settings file',

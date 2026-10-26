@@ -802,6 +802,7 @@ function renderStatus() {
 function renderSettings() {
   $('hide-found').checked = settings.hideFound;
   $('show-captures').checked = !!settings.showInCaptures;
+  $('show-captures').closest('label').hidden = settings.captureProtection === false;
   $('opacity').value = Math.round(settings.opacity * 100);
   $('opacity-value').textContent = `${Math.round(settings.opacity * 100)} %`;
   $('size').value = settings.markerSize;
