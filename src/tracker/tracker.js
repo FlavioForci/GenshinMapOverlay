@@ -1,6 +1,7 @@
 // Unsichtbares Tracker-Fenster: Aufnahme + Bildvergleich, Ergebnis an den Hauptprozess.
-// Ablauf (Fluss, Verankern, Drift) in tracker-core.js, Drift-Prüfung im Worker (check-worker.js).
-/* global MatcherCore, ReferenceBuilder, TrackerCore, Hud */
+// Ablauf (Fluss, Verankern, Drift) in tracker-core.js, Drift-Prüfung im Worker (check-worker.js),
+// Spielfigur auf der Minimap (Weltansicht) in minimap-core.js.
+/* global MatcherCore, ReferenceBuilder, TrackerCore, MinimapCore, Hud */
 const api = window.trackerApi;
 const CAPTURE_WIDTH = 1280;
 const FLOW_FPS = 30;
@@ -10,6 +11,9 @@ const FLOW_FPS = 30;
 const MASK = { purple: true, erode: 13, gray: 70, sea: 80 };
 const CHECK_MS_WORKER = 250;
 const CHECK_MS_INLINE = 1000;
+// Minimap: Takt in der Weltansicht; Anker nur nach so langer Weltansicht (sonst wäre es eine verschobene Karte)
+const MINIMAP_FPS = 15;
+const ANCHOR_AFTER_MS = 1500;
 
 let cv = null;
 let settings = null;
@@ -21,6 +25,13 @@ let reader = null;
 let stream = null;
 let frameCanvas = null;
 let frameCtx = null;
+let cornerCanvas = null;
+let cornerCtx = null;
+let minimap = null;
+let minimapAnchor = null;
+let minimapShown = false;
+let unlockedSince = 0;
+let lastSearch = 0;
 let locked = false;
 let running = false;
 let building = false;
@@ -59,6 +70,49 @@ async function tileRgba(z, x, y) {
   if (tileCache.size > 300) tileCache.delete(tileCache.keys().next().value);
   tileCache.set(key, rgba);
   return rgba;
+}
+
+// ---------- Kachelbild für die Minimap ----------
+
+const tileBitmaps = new Map();
+
+function tileBitmap(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (tileBitmaps.has(key)) return tileBitmaps.get(key);
+  const loading = api.tile(z, x, y)
+    .then((bytes) => (bytes && bytes.length ? createImageBitmap(new Blob([bytes], { type: 'image/jpeg' })) : null))
+    .catch(() => null);
+  tileBitmaps.set(key, loading);
+  if (tileBitmaps.size > 200) {
+    const [oldKey, old] = tileBitmaps.entries().next().value;
+    tileBitmaps.delete(oldKey);
+    old.then((bmp) => bmp && bmp.close());
+  }
+  return loading;
+}
+
+// size×size um Kartenpunkt cx/cy, scale = Bildpixel je Kartenpixel (z13); Kachelstufe passend zum Maßstab
+async function renderRegion(cx, cy, scale, size) {
+  const z = Math.min(15, Math.max(11, 13 + Math.ceil(Math.log2(scale) - 0.25)));
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, size, size);
+  const tilePx = 256 * 2 ** (13 - z);
+  const x0 = cx - size / (2 * scale);
+  const y0 = cy - size / (2 * scale);
+  const half = 2 ** (z - 1);
+  const jobs = [];
+  for (let ty = Math.floor(y0 / tilePx); ty <= Math.floor((y0 + size / scale) / tilePx); ty++) {
+    for (let tx = Math.floor(x0 / tilePx); tx <= Math.floor((x0 + size / scale) / tilePx); tx++) {
+      jobs.push(tileBitmap(z, tx - half, half - ty - 1).then((bmp) => {
+        if (bmp) ctx.drawImage(bmp, (tx * tilePx - x0) * scale, (ty * tilePx - y0) * scale, tilePx * scale, tilePx * scale);
+      }));
+    }
+  }
+  await Promise.all(jobs);
+  return ctx.getImageData(0, 0, size, size);
 }
 
 function referenceKey() {
@@ -157,6 +211,7 @@ async function prepareReference(force) {
     if (core) core.reset();
     core = new TrackerCore.TrackerCore(cv, matcher, { exclude: Hud.trackerRects, mask: MASK, trustInliers: 30, checkMs: CHECK_MS_INLINE });
     startChecker(bytes, options);
+    if (!minimap) minimap = new MinimapCore.MinimapTracker(cv, renderRegion);
     status('ready', 'status.ready');
   } catch (err) {
     status('error', 'status.buildFailed', { error: err.message });
@@ -182,22 +237,49 @@ function stopCapture() {
   stream = null;
 }
 
-async function grabFrame() {
+// full: ganzes Bild (1280 breit) für die große Karte; corner: Minimap-Ecke in voller Auflösung, auf 1080p skaliert
+async function grabFrame(wantFull, wantCorner) {
   if (!reader) await startCapture();
   const { value: frame, done } = await reader.read();
   if (done || !frame) {
     reader = null;
     return null;
   }
-  const width = CAPTURE_WIDTH;
-  const height = Math.round((CAPTURE_WIDTH * frame.displayHeight) / frame.displayWidth);
-  if (!frameCanvas || frameCanvas.width !== width || frameCanvas.height !== height) {
-    frameCanvas = new OffscreenCanvas(width, height);
-    frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+  let full = null;
+  let corner = null;
+  if (wantFull) {
+    const width = CAPTURE_WIDTH;
+    const height = Math.round((CAPTURE_WIDTH * frame.displayHeight) / frame.displayWidth);
+    if (!frameCanvas || frameCanvas.width !== width || frameCanvas.height !== height) {
+      frameCanvas = new OffscreenCanvas(width, height);
+      frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+    }
+    frameCtx.drawImage(frame, 0, 0, width, height);
+    full = frameCtx.getImageData(0, 0, width, height);
   }
-  frameCtx.drawImage(frame, 0, 0, width, height);
+  if (wantCorner) {
+    // Genshin skaliert die Oberfläche mit der Höhe
+    const c = MinimapCore.GEOMETRY.corner;
+    const k = frame.displayHeight / 1080;
+    if (!cornerCanvas) {
+      cornerCanvas = new OffscreenCanvas(c.w, c.h);
+      cornerCtx = cornerCanvas.getContext('2d', { willReadFrequently: true });
+      cornerCtx.imageSmoothingQuality = 'high';
+    }
+    cornerCtx.drawImage(frame, c.x * k, c.y * k, c.w * k, c.h * k, 0, 0, c.w, c.h);
+    corner = cornerCtx.getImageData(0, 0, c.w, c.h);
+  }
   frame.close();
-  return frameCtx.getImageData(0, 0, width, height);
+  return { full, corner };
+}
+
+// Spielfigur in Kartenpixeln (z13) und Zoom der Minimap (Bildschirmpixel je Kartenpixel bei 1080p) ans Overlay,
+// null = keine Marker auf der Minimap
+function reportMinimap(m) {
+  const show = !!m && m.ok;
+  if (show) api.minimap({ x: m.x, y: m.y, scale: m.scale });
+  else if (minimapShown) api.minimap(null);
+  minimapShown = show;
 }
 
 function report(res, width, height) {
@@ -227,22 +309,48 @@ async function loop() {
   while (settings.active && matcher && !building) {
     const started = performance.now();
     try {
-      const img = await grabFrame();
-      if (!img) {
+      // große Karte: offen → jedes Bild; sonst alle searchIntervalMs suchen, dazwischen nur die Minimap
+      const now = performance.now();
+      const recentlyLocked = Date.now() - lastLockAt < 3000;
+      const searchDue = core.locked || recentlyLocked || now - lastSearch >= settings.searchIntervalMs;
+      const minimapOn = settings.minimap !== false && !!minimap && (minimap.active || !!minimapAnchor);
+      const frame = await grabFrame(searchDue, minimapOn && !core.locked);
+      if (!frame) {
         await sleep(200);
         continue;
       }
-      const wasLocked = core.locked;
-      const prior = core.prior;
-      const res = core.step(img, performance.now());
-      recent.push({ t: Date.now(), mode: res.mode, ok: res.ok, inliers: res.inliers, pairs: res.pairs, spread: res.spread, s: res.s, ms: res.ms });
-      if (recent.length > 240) recent.shift();
-      if (res.ok) {
-        lastLockAt = Date.now();
-        report(res, img.width, img.height);
-      } else if (!core.locked) {
-        if (wasLocked) lostFrame = { data: new Uint8ClampedArray(img.data), width: img.width, height: img.height, lastS: prior.s };
-        report(null);
+      if (frame.full) {
+        const img = frame.full;
+        lastSearch = now;
+        const wasLocked = core.locked;
+        const prior = core.prior;
+        const res = core.step(img, performance.now());
+        recent.push({ t: Date.now(), mode: res.mode, ok: res.ok, inliers: res.inliers, pairs: res.pairs, spread: res.spread, s: res.s, ms: res.ms });
+        if (recent.length > 240) recent.shift();
+        if (res.ok) {
+          // Karte frisch geöffnet (vorher Weltansicht) → Mitte = Spielfigur, Anker für die Minimap
+          if (!wasLocked && now - unlockedSince > ANCHOR_AFTER_MS && minimap) {
+            minimapAnchor = { x: (img.width / 2 - res.tx) / res.s, y: (img.height / 2 - res.ty) / res.s };
+            minimap.stop();
+          }
+          lastLockAt = Date.now();
+          report(res, img.width, img.height);
+        } else if (!core.locked) {
+          if (wasLocked) {
+            lostFrame = { data: new Uint8ClampedArray(img.data), width: img.width, height: img.height, lastS: prior.s };
+            unlockedSince = now;
+          }
+          report(null);
+        }
+      }
+      if (core.locked || !minimapOn) {
+        reportMinimap(null);
+      } else if (frame.corner) {
+        if (minimapAnchor) {
+          minimap.start(minimapAnchor.x, minimapAnchor.y, now);
+          minimapAnchor = null;
+        }
+        reportMinimap(await minimap.step(frame.corner, now));
       }
       if (failures) status('ready', 'status.ready');
       failures = 0;
@@ -255,17 +363,20 @@ async function loop() {
       await sleep(Math.min(10000, 1000 * failures));
       continue;
     }
-    // kurz nach einem Verlust ist die Karte meist noch offen → im Nachführ-Takt suchen
+    // kurz nach einem Verlust ist die Karte meist noch offen → im Nachführ-Takt suchen; Minimap im eigenen Takt
     const recentlyLocked = Date.now() - lastLockAt < 3000;
     const fps = core.flow.active ? FLOW_FPS : settings.fps;
-    const interval = core.locked || recentlyLocked ? 1000 / fps : settings.searchIntervalMs;
+    let interval = core.locked || recentlyLocked ? 1000 / fps : settings.searchIntervalMs;
+    if (!core.locked && minimap && minimap.active && settings.minimap !== false) interval = Math.min(interval, 1000 / MINIMAP_FPS);
     await sleep(Math.max(0, interval - (performance.now() - started)));
   }
   running = false;
   if (!settings.active) {
     stopCapture();
     if (core) core.reset();
+    if (minimap) minimap.stop();
     report(null);
+    reportMinimap(null);
     if (matcher) status('paused', 'status.paused');
   }
 }
@@ -273,6 +384,11 @@ async function loop() {
 async function applySettings(next) {
   const levelsChanged = settings && (next.levels.join() !== settings.levels.join() || next.tileset.version !== settings.tileset.version);
   settings = next;
+  // Minimap aus (Tray/Panel) → Verfolgung beenden, Marker weg
+  if (settings.minimap === false && minimap) {
+    minimap.stop();
+    reportMinimap(null);
+  }
   if (levelsChanged) await prepareReference(false);
   if (settings.active && matcher) {
     status('ready', 'status.ready');
@@ -288,6 +404,8 @@ api.on('tracker:rebuild', async () => {
 api.on('tracker:restart-capture', () => {
   stopCapture();
   if (core) core.reset();
+  if (minimap) minimap.stop();
+  reportMinimap(null);
 });
 
 (async () => {

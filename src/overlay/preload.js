@@ -1,7 +1,7 @@
 // Brücke zwischen Overlay-Fenster und Hauptprozess.
 const { contextBridge, ipcRenderer } = require('electron');
 
-const EVENTS = ['settings', 'found:all', 'found:changed', 'tracker:status', 'data:markers', 'view', 'notice', 'panel:toggle', 'cursor'];
+const EVENTS = ['settings', 'found:all', 'found:changed', 'tracker:status', 'data:markers', 'view', 'minimap', 'nearby:done', 'notice', 'panel:toggle', 'cursor'];
 
 contextBridge.exposeInMainWorld('overlayApi', {
   on: (channel, callback) => {
@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('overlayApi', {
   keyboard: (wanted) => ipcRenderer.send('overlay:keyboard', wanted),
   saveSettings: (patch) => ipcRenderer.send('overlay:settings', patch),
   toggleFound: (id) => ipcRenderer.send('overlay:found-toggle', id),
+  nearby: (id) => ipcRenderer.send('overlay:nearby', id),
   refreshData: () => ipcRenderer.send('overlay:refresh-data'),
   hide: () => ipcRenderer.send('overlay:hide'),
   icon: (type) => ipcRenderer.invoke('overlay:icon', type),

@@ -90,6 +90,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hud::before, .toast::before { top: 0; }
 .hud::after, .toast::after { bottom: 0; }
 .toast { top: calc(66 * var(--u)); }
+
+/* Hinweis rechts neben der Minimap: Marker in der Nähe */
+.nearby {
+  position: fixed;
+  left: calc(288 * var(--u));
+  top: calc(98 * var(--u));
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: calc(10 * var(--u));
+  padding: calc(8 * var(--u)) calc(28 * var(--u)) calc(8 * var(--u)) calc(12 * var(--u));
+  background: linear-gradient(90deg, rgba(26, 30, 40, 0.88) 70%, transparent);
+  border-left: max(2px, calc(2 * var(--u))) solid var(--gold);
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 max(1px, calc(1 * var(--u))) calc(2 * var(--u)) rgba(0, 0, 0, 0.5);
+}
+.nearby[hidden] { display: none; }
+.nearby img { width: calc(30 * var(--u)); height: calc(30 * var(--u)); }
+.nearby-text { display: flex; flex-direction: column; gap: calc(2 * var(--u)); }
+.nearby-text strong { font-size: calc(14 * var(--u)); font-weight: 700; }
+.nearby-text span { color: var(--gold); font-size: calc(12 * var(--u)); }
+.nearby.done .nearby-text span { color: var(--ok); }
 .hud { display: flex; align-items: center; gap: calc(12 * var(--u)); }
 .hud-bar { width: calc(120 * var(--u)); height: calc(4 * var(--u)); border-radius: calc(2 * var(--u)); background: rgba(255, 255, 255, 0.15); overflow: hidden; }
 .hud-bar span { display: block; height: 100%; width: 0; background: var(--gold); transition: width 0.3s; }
