@@ -154,7 +154,7 @@
       $('transfer-use-prior').hidden = !transferPreview?.priorDestinations.length;
       $('transfer-use-prior').disabled = disabled || !transferPreview?.priorDestinations.length;
       $('transfer-report').disabled = disabled || !transferPreview;
-      $('transfer-status').textContent = transferStatus ? t(transferStatus) : t('transfer.pending');
+      $('transfer-status').textContent = transferStatus ? t(transferStatus) : '';
       $('transfer-counts').textContent = transferCounts ? countKeys.map(key => t('transfer.count.' + key) + ': ' + transferCounts[key]).join(' · ') : '';
       $('transfer-coverage').textContent = transferCoverage ? t(transferCoverage.complete ? 'transfer.complete' : 'transfer.partial') + ' · ' + t('transfer.categories') + ': ' + transferCoverage.categories.join(', ') + ' · ' + t('transfer.levels') + ': ' + transferCoverage.levels.join(', ') : '';
       $('transfer-decisions').textContent = transferDecisions.map(row => row.sourceId + ': ' + row.reason).join('\n');
