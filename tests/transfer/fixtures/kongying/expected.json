@@ -1,0 +1,10 @@
+{
+  "supported": false,
+  "progressObserved": false,
+  "catalogSampleCount": 0,
+  "syntheticFoundIds": [
+    "900000001",
+    "900000002"
+  ],
+  "reasonCode": "catalog-and-setter-verification-pending"
+}

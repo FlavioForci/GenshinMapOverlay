@@ -1,0 +1,10 @@
+{
+  "provider": "bwiki",
+  "map": "bwiki:ys:Data:Map4",
+  "generation": "Data:Map4:revision689825",
+  "checkedAt": "2026-10-24",
+  "catalogEvidence": "public-response",
+  "progressEvidence": "synthetic",
+  "liveAcceptance": false,
+  "notes": "Public catalog sample omits author/content/time fields. Progress is synthetic source-shaped localStorage fallback, not live IndexedDB evidence."
+}

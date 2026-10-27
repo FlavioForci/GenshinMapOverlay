@@ -1,0 +1,112 @@
+# Build the Windows x64 installer on pull requests or by manual dispatch.
+# A manual run can optionally attach the installer to an existing release.
+name: Windows build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the installer to (leave empty to build only)
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'build/**'
+      - 'docs/map-transfers.md'
+      - 'tools/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # Some progress tests inject failures using Unix paths. Run the existing
+  # suites on Linux while the Windows installer builds in parallel.
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-fund
+
+      - name: Verify progress and transfers
+        run: |
+          npm run test:progress
+          npm run test:transfer
+          npm run build:transfer-scripts
+          git diff --exit-code -- src/transfer/scripts
+
+  build:
+    runs-on: windows-2022
+    steps:
+      # Generated transfer scripts must match the repository bytes exactly.
+      - name: Preserve repository line endings
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cache Electron downloads and packaging tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-v1-${{ runner.os }}-${{ runner.arch }}-
+
+      - run: npm ci --no-fund
+
+      - name: Build installer
+        run: npm run dist -- --x64 --publish never
+
+      - name: Verify packaged transfer files
+        run: |
+          $checkDir = Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString())
+          try {
+            node node_modules/@electron/asar/bin/asar.js extract dist/win-unpacked/resources/app.asar $checkDir
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            npm run check:transfer-package -- $checkDir
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item -Recurse -Force $checkDir -ErrorAction SilentlyContinue
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/GenshinMapOverlay-Setup-*.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: dist
+
+      - name: Attach installer to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" dist/GenshinMapOverlay-Setup-*.exe --clobber

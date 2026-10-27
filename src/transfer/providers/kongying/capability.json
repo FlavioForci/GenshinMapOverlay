@@ -1,0 +1,118 @@
+{
+  "provider": "kongying",
+  "adapterVersion": "0.1.0",
+  "status": "unavailable",
+  "variants": [
+    {
+      "id": "v3-web-local",
+      "origins": [
+        "https://v3.yuanshen.site"
+      ],
+      "map": "kongying:v3:teyvat",
+      "generation": "index.6b600c49:IndexPage.11f8966b",
+      "accountTier": "browser-local",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "POST",
+          "origin": "https://cloud.yuanshen.site",
+          "path": "/api/marker/get/list_byinfo"
+        },
+        {
+          "method": "POST",
+          "origin": "https://cloud.yuanshen.site",
+          "path": "/api/marker/get/list_byid"
+        },
+        {
+          "method": "GET",
+          "origin": "https://assets.yuanshen.site",
+          "path": "/webapp.json"
+        }
+      ],
+      "statePaths": [
+        "localStorage.marked_layers",
+        "localStorage.marked_timelayers"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "catalog-and-setter-verification-pending"
+    },
+    {
+      "id": "v3-web-gitee-cloud",
+      "origins": [
+        "https://v3.yuanshen.site"
+      ],
+      "map": "kongying:v3:teyvat",
+      "generation": "index.6b600c49:IndexPage.11f8966b",
+      "accountTier": "gitee-cloud",
+      "browser": {
+        "family": "chromium",
+        "version": ""
+      },
+      "catalogFingerprint": "",
+      "read": "unverified",
+      "write": "unverified",
+      "restore": "unverified",
+      "pacing": null,
+      "endpoints": [
+        {
+          "method": "POST",
+          "origin": "https://cloud.yuanshen.site",
+          "path": "/api/marker/get/list_byinfo"
+        },
+        {
+          "method": "POST",
+          "origin": "https://cloud.yuanshen.site",
+          "path": "/api/marker/get/list_byid"
+        },
+        {
+          "method": "GET",
+          "origin": "https://assets.yuanshen.site",
+          "path": "/webapp.json"
+        },
+        {
+          "method": "GET",
+          "origin": "https://gitee.com",
+          "path": "/api/v5/gists"
+        },
+        {
+          "method": "PATCH",
+          "origin": "https://gitee.com",
+          "path": "/api/v5/gists/{id}"
+        }
+      ],
+      "statePaths": [
+        "localStorage.marked_layers",
+        "localStorage.marked_timelayers",
+        "localStorage._yuanshenmap_saveid",
+        "localStorage._yuanshenmap_save_time"
+      ],
+      "evidence": {
+        "checkedAt": "2026-10-24",
+        "read": false,
+        "write": false,
+        "reload": false,
+        "destinationOnlyPreserved": false,
+        "pairAccepted": false,
+        "restore": false
+      },
+      "reasonCode": "selected-cloud-save-acceptance-pending"
+    }
+  ],
+  "reasonCode": "catalog-and-setter-verification-pending"
+}

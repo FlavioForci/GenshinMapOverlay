@@ -1,0 +1,28 @@
+[
+  {
+    "id": "105h1sdw0to",
+    "markType": 2,
+    "point": {
+      "lat": "29.515342",
+      "lng": "-4.617722"
+    }
+  },
+  {
+    "id": "58fppaafji",
+    "markType": 2,
+    "point": {
+      "lat": "28.577664",
+      "lng": "-6.595431"
+    }
+  },
+  {
+    "id": "d0iv42b7oz",
+    "markType": 22,
+    "point": {
+      "lat": -2059,
+      "lng": -9182
+    },
+    "layer": "G",
+    "version": 4
+  }
+]

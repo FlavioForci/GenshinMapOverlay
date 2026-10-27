@@ -1,7 +1,11 @@
 // %APPDATA%\Genshin Map Overlay\settings.json
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+
+const DEFAULT_PROFILE_PREFERENCES = Object.freeze({
+  enabledTypes: Object.freeze(['o5', 'o6', 'o141', 'o194', 'o403', 'o508', 'o626', 'o694', 'o833']),
+  hideFound: false,
+});
 
 const DEFAULTS = {
   hotkeys: {
@@ -17,8 +21,8 @@ const DEFAULTS = {
   // null = Setup bzw. Windows-Sprache
   language: null,
   // Oculi. Teleporter/Statuen nicht, die zeigt die Ingame-Karte schon
-  enabledTypes: ['o5', 'o6', 'o141', 'o194', 'o403', 'o508', 'o626', 'o694', 'o833'],
-  hideFound: false,
+  enabledTypes: [...DEFAULT_PROFILE_PREFERENCES.enabledTypes],
+  hideFound: DEFAULT_PROFILE_PREFERENCES.hideFound,
   // false: Overlay fehlt in Aufnahmen, stört so auch den Tracker nicht
   showInCaptures: false,
   // Marker auf der Minimap (Weltansicht); „in der Nähe“-Hinweis bis zu so vielen Kartenpixeln (z13)
@@ -39,6 +43,7 @@ const DEFAULTS = {
 };
 
 function filePath() {
+  const { app } = require('electron');
   return path.join(app.getPath('userData'), 'settings.json');
 }
 
@@ -63,15 +68,28 @@ function normalize(raw) {
   return cfg;
 }
 
-function load() {
+function load({ preserveMalformed = false } = {}) {
   try {
     return normalize(JSON.parse(fs.readFileSync(filePath(), 'utf8')));
   } catch {
     // Fehlt oder kaputt → mit Standardwerten neu anlegen
     const cfg = normalize({});
-    save(cfg);
+    if (!preserveMalformed) save(cfg);
     return cfg;
   }
+}
+
+// Create on explicit open, after migration has had a chance to preserve legacy
+// files. Exclusive creation keeps existing (including malformed) bytes intact.
+function ensureFile() {
+  const file = filePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  try {
+    fs.writeFileSync(file, '{}', { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  return file;
 }
 
 // Nur Abweichungen speichern, damit neue Standardwerte bei Updates greifen
@@ -89,4 +107,4 @@ function save(cfg) {
   fs.writeFileSync(filePath(), JSON.stringify(out, null, 2), 'utf8');
 }
 
-module.exports = { load, save, filePath };
+module.exports = { load, save, filePath, ensureFile, DEFAULT_PROFILE_PREFERENCES };

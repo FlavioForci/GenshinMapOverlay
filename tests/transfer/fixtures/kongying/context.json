@@ -1,0 +1,10 @@
+{
+  "provider": "kongying",
+  "map": "kongying:v3:teyvat",
+  "generation": "index.6b600c49:IndexPage.11f8966b",
+  "checkedAt": "2026-10-24",
+  "catalogEvidence": "unobserved",
+  "progressEvidence": "synthetic",
+  "liveAcceptance": false,
+  "notes": "Synthetic permanent marked_layers array based on inspected source; timed respawn data is separate. Live catalog is unobserved."
+}

@@ -49,6 +49,44 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 
 „Genshin randlos starten“ und der Tasten-Helfer gibt es nur unter Windows, auf dem Mac braucht man sie nicht.
 
+### Linux (x64, Beta)
+
+Es gibt eine Linux-Version als AppImage und `.deb`. Sie ist neu und mit dem Spiel kaum getestet, bitte
+melde Auffälligkeiten im [Discord](https://discord.gg/TaKd4BU8f). Genshin läuft unter Linux nur über
+Wine oder Proton. Das unterstützt HoYoverse nicht offiziell, unabhängig vom Overlay.
+
+1. `GenshinMapOverlay-<Version>-linux-x86_64.AppImage` unter
+   [Releases](https://github.com/FlavioForci/GenshinMapOverlay/releases/latest) laden, ausführbar
+   machen (`chmod +x GenshinMapOverlay-*.AppImage`) und starten. AppImages brauchen FUSE 2: unter
+   Ubuntu 22.04 `sudo apt install libfuse2`, unter Ubuntu 24.04 `sudo apt install libfuse2t64`.
+   Unter Debian/Ubuntu geht stattdessen auch `GenshinMapOverlay-<Version>-linux-amd64.deb`
+   (`sudo apt install ./GenshinMapOverlay-*-linux-amd64.deb`), gestartet wird dann übers App-Menü.
+2. Das Overlay sitzt im Infobereich. Unter GNOME braucht das die Erweiterung **AppIndicator and
+   KStatusNotifierItem Support** (bei Ubuntu schon dabei). Ohne Infobereich gehen die Tasten und der
+   Reiter **Marker** an der Karte trotzdem. Beenden mit `pkill -f genshin-map-overlay`.
+3. Genshin in den Grafikeinstellungen auf Fenster oder randlos stellen und die Karte mit **M** öffnen.
+
+Voraussetzungen: Linux x64 mit X11 oder ein Wayland-Desktop mit XWayland (GNOME, KDE Plasma und die
+meisten anderen), dazu ein Compositor für das durchsichtige Fenster.
+
+Einschränkungen unter Linux:
+
+- **Wayland:** Das Overlay startet sich selbst unter XWayland (X11) neu, weil natives Wayland Apps
+  kein durchklickbares Fenster immer oben und keine globalen Tasten erlaubt. Die Bildschirmaufnahme
+  läuft über den Systemdialog (PipeWire): den Bildschirm mit dem Spiel wählen. Der Dialog kommt bei
+  jedem Start des Overlays wieder. Natives Wayland erzwingt `--ozone-platform=wayland`, dann gehen
+  Position, Klicks und Tasten aber meist nicht.
+- **Tasten** gehen, solange das Spielfenster den Fokus hat. Hält das Spiel im Vollbild die Tastatur
+  fest, das Tray-Menü oder den Reiter an der Karte nehmen.
+- **Screenshots:** Linux kann Fenster nicht aus Bildschirmaufnahmen ausblenden. Das Overlay ist in
+  Screenshots und Streams zu sehen, der Schalter **In Screenshots sichtbar** fehlt im Panel. Die
+  Kartenerkennung sieht die Marker mit, das kann sie etwas unruhiger machen.
+- **Genshin randlos starten** und der Tasten-Helfer gibt es nur unter Windows.
+- Noch nicht getestet: mehrere Monitore, Gamescope, Wines virtueller Desktop, Tippen in der Panel-Suche.
+
+Einstellungen, Cache, Log und gefundene Marker liegen in `~/.config/Genshin Map Overlay`. Tray-Menü →
+**Beim Anmelden starten** trägt das Overlay in `~/.config/autostart` ein.
+
 ## Bedienung
 
 | Taste | Funktion |
@@ -67,7 +105,29 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 - Klicks neben die Marker gehen ganz normal ans Spiel (ziehen, zoomen, Wegpunkte setzen).
 - Außerhalb der Karte hält das Spiel die Maus fest. Dort **Alt** gedrückt halten, um im Panel zu klicken.
 
-Gefundene Marker werden nur auf deinem PC gespeichert (`%APPDATA%\Genshin Map Overlay\found.json`).
+Der Fortschritt wird lokal in benannten Profilen gespeichert. Öffne **Profile & Übertragung** im
+Tray-Menü oder Marker-Panel, um ein Profil anzulegen, Name und Region / Notiz zu ändern oder das Profil
+zu wechseln. Jedes Profil hat eigene gefundene Marker, Markerfilter und die F9-Sichtbarkeit.
+
+Unter Windows liegen die lokalen Dateien in `%APPDATA%\Genshin Map Overlay\progress`, unter macOS in
+`~/Library/Application Support/Genshin Map Overlay/progress`. Beim ersten Upgrade werden `found.json`
+und die alten Marker-Einstellungen aus `settings.json` einmalig importiert. Ihre ursprünglichen Bytes
+bleiben in internen Wiederherstellungssicherungen erhalten. Spätere Änderungen an diesen alten Feldern
+ändern den Profilfortschritt nicht.
+
+Mit **Alle Profile exportieren…** erstellst du eine portable JSON-Sicherung. **Sicherung importieren…**
+legt neue Profile an, erhält vorhandene Profile und aktiviert das erste importierte Profil. Beim Abbrechen
+eines Dialogs ändert sich nichts. Die Sicherungen enthalten wirksamen Fortschritt und Profileinstellungen,
+aber keine Konto- oder Installationsidentität. Bewahre eine Kopie außerhalb des App-Ordners auf; ein
+Google-Konto oder eine Cloud-Einrichtung ist nicht nötig.
+
+Wenn lokale Dateien nicht lesbar sind oder eine Speicherung nicht bestätigt werden kann, ist der
+Fortschritt schreibgeschützt. Behebe den Speicherzugriff und wähle in **Profile & Übertragung** zunächst
+**Lokale Dateien erneut versuchen**; dabei werden aktuelle Daten gelesen und keine älteren Daten
+wiederhergestellt. **Letzte gültige Sicherung wiederherstellen** ersetzt den lokalen Fortschritt ausdrücklich
+durch den geprüften vorherigen Stand und erhält Originaldateien zur Wiederherstellung. Kann das Beenden
+eine Speicherung nicht abschließen, bleibt die App mit einer Fehlermeldung offen. Behebe das Speicherproblem
+und versuche erneut zu beenden.
 
 ### Minimap
 

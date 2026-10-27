@@ -57,6 +57,44 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 
 "Start Genshin borderless" and the hotkey helper are Windows-only and not needed on a Mac.
 
+### Linux (x64, beta)
+
+There is a Linux version as AppImage and `.deb`. It is new and has hardly been tested with the game
+yet, so please report anything odd on [Discord](https://discord.gg/TaKd4BU8f). Genshin runs on Linux
+only through Wine or Proton. HoYoverse doesn't support that officially, regardless of the overlay.
+
+1. Download `GenshinMapOverlay-<version>-linux-x86_64.AppImage` from
+   [Releases](https://github.com/FlavioForci/GenshinMapOverlay/releases/latest), make it executable
+   (`chmod +x GenshinMapOverlay-*.AppImage`) and start it. AppImages need FUSE 2: on Ubuntu 22.04
+   `sudo apt install libfuse2`, on Ubuntu 24.04 `sudo apt install libfuse2t64`.
+   On Debian/Ubuntu you can install `GenshinMapOverlay-<version>-linux-amd64.deb` instead
+   (`sudo apt install ./GenshinMapOverlay-*-linux-amd64.deb`) and start it from the app menu.
+2. The overlay sits in the system tray. On GNOME this needs the extension **AppIndicator and
+   KStatusNotifierItem Support** (Ubuntu has it built in). Without a tray, the hotkeys and the
+   **Markers** tab on the map still work. Quit with `pkill -f genshin-map-overlay`.
+3. Put Genshin in window or borderless mode in its graphics settings and open the map with **M**.
+
+Requirements: x64 Linux with X11, or a Wayland desktop with XWayland (GNOME, KDE Plasma and most
+others), and a compositor for the see-through window.
+
+Limits on Linux:
+
+- **Wayland:** the overlay restarts itself on XWayland (X11), because native Wayland doesn't let apps
+  place an always-on-top, click-through window or catch hotkeys. Screen capture goes through the
+  system dialog (PipeWire): pick the screen with the game. The dialog comes back each time the overlay
+  starts. Force native Wayland with `--ozone-platform=wayland`, but expect position, clicks and
+  hotkeys to break.
+- **Hotkeys** work while the game window has focus. If the game grabs the keyboard in fullscreen, use
+  the tray menu or the tab on the map.
+- **Screenshots:** Linux can't hide a window from screen captures. The overlay shows up in
+  screenshots and streams, and the **Visible in screenshots** switch is missing in the panel. The map
+  recognition sees the markers too, which may make it a little less steady.
+- **Start Genshin borderless** and the hotkey helper are Windows-only.
+- Not tested yet: several monitors, Gamescope, Wine's virtual desktop, typing in the panel search.
+
+Settings, cache, log and found markers are in `~/.config/Genshin Map Overlay`. Tray menu →
+**Start on login** adds the overlay to `~/.config/autostart`.
+
 ## How to use it
 
 | Key | What it does |
@@ -75,7 +113,38 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 - Clicks next to markers go to the game as usual (drag, zoom, set waypoints).
 - Outside the map the game locks the mouse. Hold **Alt** to click in the panel there.
 
-Found markers are saved only on your PC (`%APPDATA%\Genshin Map Overlay\found.json`).
+Progress is saved locally in named profiles. Open **Profiles & transfers** from the tray menu or the
+marker panel to create a profile, edit its name and region / note, or switch profiles. Each profile has
+its own found markers, marker filters and F9 visibility preference.
+
+On Windows, local files live in `%APPDATA%\Genshin Map Overlay\progress`; on macOS they live in
+`~/Library/Application Support/Genshin Map Overlay/progress`. The first upgrade imports `found.json`
+and the old marker preferences from `settings.json` once, preserving their original bytes in internal
+recovery backups. Later changes to those legacy fields do not change profile progress.
+
+Use **Export all profiles…** to save a portable JSON backup. **Import backup…** adds new profiles,
+keeps existing ones and activates the first imported profile. Canceling either dialog changes nothing.
+These backups contain effective progress and profile preferences, with no account or installation
+identity. Keep a copy outside the app folder; no Google account or cloud setup is required.
+
+If local files cannot be read or a save cannot be confirmed, progress becomes read-only. In
+**Profiles & transfers**, use **Retry local files** after fixing storage access; this reads current data
+without restoring older progress. **Restore last good backup** explicitly replaces local progress with
+the validated previous save and preserves original files for recovery. If quitting cannot finish a save,
+the app stays open with an error; resolve the storage problem and quit again.
+
+## Local map progress files
+
+**Profiles & transfers** can preview, import and export normalized local transfer JSON files.
+Imports add confirmed found marks to a new profile by default; merging into the active profile
+is explicit. Review the counts, coverage and exclusion report before applying. Portable profile
+backups also carry local transfer attachments, including unknown source records.
+
+Website automation for AppSample, international HoYoLAB, MapGenie, Kongying and BWIKI remains
+pending. All ten bundled site scripts currently report the reason and stop; no production site
+adapters or cross-provider mapping packs are installed. No Google sign-in or live Drive sync is
+included. See the [local transfer guide and dated support matrix](docs/map-transfers.md) for file
+formats, undo/retry/recovery behavior, browser limits and remaining acceptance gates.
 
 ### Minimap
 
@@ -141,7 +210,7 @@ Windows Settings → Apps → **Genshin Map Overlay**. Settings, cache and found
 
 ## Building from source
 
-Requires [Node.js](https://nodejs.org) 20 or newer.
+Requires [Node.js](https://nodejs.org) 22.12.0 or newer.
 
 ```bash
 npm install
@@ -156,6 +225,22 @@ Build the installer (ends up in `dist\`):
 ```bash
 npm run dist
 ```
+
+Verify local progress and transfer delivery before packaging:
+
+```bash
+npm run test:progress
+npm run test:transfer
+npm run build:transfer-scripts
+```
+
+The [transfer guide](docs/map-transfers.md#package-verification-for-maintainers) explains how to
+extract a packaged ASAR and run `npm run check:transfer-package -- EXTRACTED_APP_DIRECTORY`.
+The checker verifies bundled files and deterministic scripts; live provider/platform acceptance
+is separate.
+
+On Linux, `npm run dist:linux` builds the AppImage and `.deb` instead. The GitHub Actions workflows
+`linux.yml` and `mac.yml` build the other platforms.
 
 | Path | Contents |
 |---|---|

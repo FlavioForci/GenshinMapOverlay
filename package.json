@@ -5,10 +5,15 @@
   "private": true,
   "author": "Genshin Map Overlay",
   "description": "Shows interactive map markers on the Genshin Impact in-game map via image recognition, without touching the game.",
+  "homepage": "https://github.com/FlavioForci/GenshinMapOverlay",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "test:match": "node tools/match-test.js",
+    "test:progress": "node --test \"tests/progress/*.test.js\"",
+    "build:transfer-scripts": "node tools/build-transfer-scripts.js",
+    "check:transfer-package": "node tools/check-transfer-package.js",
+    "test:transfer": "node --test \"tests/transfer/*.test.js\"",
     "dist": "electron-builder --win nsis",
     "data:build": "node server/tools/build-data.js",
     "data:import-comments": "node server/tools/import-comments.js",
@@ -16,7 +21,11 @@
     "server:deploy": "wrangler pages deploy public --cwd server",
     "data:import-icons": "node server/tools/import-icons.js",
     "data:import-photos": "node server/tools/import-photos.js",
-    "dist:mac": "electron-builder --mac --arm64 --publish never"
+    "dist:mac": "electron-builder --mac --arm64 --publish never",
+    "dist:linux": "electron-builder --linux --x64 --publish never"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   },
   "build": {
     "appId": "local.genshin-map-overlay",
@@ -25,7 +34,8 @@
       "src/**/*",
       "assets/**/*",
       "node_modules/@techstark/opencv-js/dist/opencv.js",
-      "package.json"
+      "package.json",
+      "docs/map-transfers.md"
     ],
     "win": {
       "target": [
@@ -64,6 +74,27 @@
         "LSUIElement": true,
         "NSScreenCaptureUsageDescription": "Genshin Map Overlay looks at the screen to find the in-game map and place the markers. Nothing is saved or sent."
       }
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "executableName": "genshin-map-overlay",
+      "maintainer": "FlavioForci <185372134+FlavioForci@users.noreply.github.com>",
+      "artifactName": "GenshinMapOverlay-${version}-linux-${arch}.${ext}"
     }
   },
   "devDependencies": {
@@ -72,9 +103,16 @@
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
     "sharp": "^0.35.5",
-    "wrangler": "^4.152.0"
+    "wrangler": "^4.35.0"
   },
   "dependencies": {
     "@techstark/opencv-js": "^5.0.0-release.1"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true,
+    "esbuild@0.25.4": true,
+    "sharp@0.33.5": true,
+    "workerd@1.20250906.0": true
   }
 }

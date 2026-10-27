@@ -1,0 +1,10 @@
+{
+  "provider": "appsample",
+  "map": "appsample:gim:2",
+  "generation": "next:g2A_0C3iZKpNbinJgViG_",
+  "checkedAt": "2026-10-24",
+  "catalogEvidence": "dated-public-cache",
+  "progressEvidence": "unobserved",
+  "liveAcceptance": false,
+  "notes": "Catalog dated 2026-10-22; decoded identity fields only. The raw level field has unverified floor semantics. Current first-party progress shape is unobserved."
+}

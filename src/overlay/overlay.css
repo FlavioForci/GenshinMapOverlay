@@ -296,6 +296,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .setting { cursor: pointer; }
+.setting[hidden] { display: none; }
 .setting:hover { background: var(--cream-hover); box-shadow: 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.5); }
 .setting-name { flex: 1; min-width: 0; }
 
@@ -596,3 +597,5 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 0 0 calc(4 * var(--u)) rgba(236, 229, 216, 0.2), 0 calc(16 * var(--u)) calc(50 * var(--u)) rgba(0, 0, 0, 0.6);
 }
 .lightbox span { color: var(--muted); }
+
+#profiles-settings { width: 100%; margin-top: calc(8 * var(--u)); }
