@@ -161,7 +161,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),
@@ -683,6 +683,42 @@ module.exports = { createTransferUi };
 
 },
 4:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer, attachmentSchema: schema } = require(0);
+
+/** Shared source-file contract. Catalog hashes match the main-process research
+ * tool so reviewed mapping assets and independent browser reads share identity.
+ * Only explicit found IDs become records; missing IDs never mean not-found.
+ */
+async function buildSourceTransfer({ provider, map, generation, catalog, foundIds }) {
+  const base = { format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay source', version: '0.1.0' }, exportedAt: new Date().toISOString(),
+    provider, adapterVersion: '0.1.0', map, catalog: { generation, fingerprint: 'pending' },
+    coverage: { categories: [], levels: [], complete: false }, records: catalog };
+  const checked = validateTransfer(base);
+  const metadata = checked.records.map(row => JSON.stringify([row.id, row.map, row.category, row.level,
+    row.position === null ? null : [row.position.x, row.position.y, row.position.space]])).sort().map(row => JSON.parse(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([provider, map, metadata])));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  schema.array(foundIds, TRANSFER_LIMITS.RECORDS);
+  const ids = [...new Set(foundIds.map(id => schema.text(id, TRANSFER_LIMITS.ID)))].sort();
+  const byId = new Map(checked.records.map(row => [row.id, row])); let unknown = 0;
+  const records = ids.map(id => {
+    const row = byId.get(id);
+    if (row) return { ...row, state: true };
+    unknown++;
+    return { id, map, category: null, level: null, state: true, position: null };
+  });
+  const categories = [...new Set(records.map(row => row.category).filter(value => value !== null))].sort();
+  const envelope = validateTransfer({ ...base, catalog: { generation, fingerprint }, records,
+    coverage: { categories: categories.length <= TRANSFER_LIMITS.COVERAGE ? categories : [], levels: [], complete: false } });
+  return { envelope, summary: { found: records.length, unknown } };
+}
+
+module.exports = { buildSourceTransfer };
+
+},
+5:function(require,module,exports){
 module.exports={"provider":"mapgenie","adapterVersion":"0.1.0","status":"planned","variants":[{"id":"website-unverified-tier","origins":["https://mapgenie.io"],"map":"mapgenie:43:121","generation":"map.c8b3a1c6:game43:map121","accountTier":"unverified","browser":{"family":"chromium","version":""},"catalogFingerprint":"49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/maps/121/data"},{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/user/map-data/121"},{"method":"PUT","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"},{"method":"DELETE","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"}],"statePaths":["window.store.getState().user.foundLocations","window.store.getState().user.activeProfileId"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"account-tier-acceptance-pending"},{"id":"website-free","origins":["https://mapgenie.io"],"map":"mapgenie:43:121","generation":"map.c8b3a1c6:game43:map121","accountTier":"website-free","browser":{"family":"chromium","version":""},"catalogFingerprint":"49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/maps/121/data"},{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/user/map-data/121"},{"method":"PUT","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"},{"method":"DELETE","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"}],"statePaths":["window.store.getState().user.foundLocations","window.store.getState().user.activeProfileId"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"account-tier-acceptance-pending"},{"id":"website-pro","origins":["https://mapgenie.io"],"map":"mapgenie:43:121","generation":"map.c8b3a1c6:game43:map121","accountTier":"website-pro","browser":{"family":"chromium","version":""},"catalogFingerprint":"49cd93ea6ab242ddcc8f88c66c90908cf8e3b1932cae29a2f5732fe8c9bcdc05","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/maps/121/data"},{"method":"GET","origin":"https://mapgenie.io","path":"/api/v1/user/map-data/121"},{"method":"PUT","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"},{"method":"DELETE","origin":"https://mapgenie.io","path":"/api/v1/user/locations/{id}"}],"statePaths":["window.store.getState().user.foundLocations","window.store.getState().user.activeProfileId"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"account-tier-acceptance-pending"}],"reasonCode":"account-tier-acceptance-pending"};
 }
 };

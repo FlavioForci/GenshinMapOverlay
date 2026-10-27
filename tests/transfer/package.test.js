@@ -31,11 +31,17 @@ async function capability(app, provider, value) {
   await fs.writeFile(path.join(app, 'src/transfer/providers', provider, 'capability.json'), JSON.stringify(value));
 }
 
-test('checker accepts the offline payload and ten reproducible scripts without provider implementations', async t => {
+test('checker accepts the source reader and ten reproducible scripts without claiming provider-pair support', async t => {
   const { app } = await fixture(t); const result = check(app);
   assert.equal(result.status, 0, result.stderr); assert.equal(result.body.ok, true);
   assert.equal(result.body.scripts, 10); assert.equal(result.body.providers.length, 5);
   assert.equal(result.body.providers.every(p => p.status !== 'supported' && p.reasonCode), true);
+});
+
+for (const provider of ['appsample', 'hoyolab', 'kongying', 'bwiki']) for (const asset of ['reader.js', 'normalize.js', ...(provider === 'appsample' ? [] : ['mapping.json', 'mapping-targets.json'])]) test(`missing ${provider} source ${asset} prevents packaging a nonfunctional exporter`, async t => {
+  const { app } = await fixture(t); const file = 'src/transfer/providers/' + provider + '/' + asset;
+  await fs.unlink(path.join(app, file));
+  const result = check(app); assert.equal(result.status, 1); assert.equal(result.body?.code, 'missing-transfer-asset'); assert.equal(result.body?.file, file);
 });
 
 test('missing script has a stable diagnostic before any package code executes', async t => {
@@ -53,6 +59,7 @@ for (const [provider, missing] of [['appsample', 'adapter.js'], ['hoyolab', 'nor
   test(`advertised ${provider} support requires ${missing} before accepting self-declared evidence`, async t => {
     const { app } = await fixture(t); await capability(app, provider, makeBrowserHarness({ provider }).adapter.capability);
     const base = path.join(app, 'src/transfer/providers', provider);
+    await fs.rm(path.join(base, missing), { force: true });
     if (missing !== 'adapter.js') await fs.writeFile(path.join(base, 'adapter.js'), 'throw new Error("never execute packaged adapters");');
     if (missing === 'mapping.json') await fs.writeFile(path.join(base, 'normalize.js'), 'throw new Error("never execute packaged normalizers");');
     const result = check(app); assert.equal(result.status, 1); assert.equal(result.body?.code, 'missing-provider-asset');

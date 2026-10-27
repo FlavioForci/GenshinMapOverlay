@@ -161,7 +161,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),
@@ -683,7 +683,250 @@ module.exports = { createTransferUi };
 
 },
 4:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer, attachmentSchema: schema } = require(0);
+
+/** Shared source-file contract. Catalog hashes match the main-process research
+ * tool so reviewed mapping assets and independent browser reads share identity.
+ * Only explicit found IDs become records; missing IDs never mean not-found.
+ */
+async function buildSourceTransfer({ provider, map, generation, catalog, foundIds }) {
+  const base = { format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay source', version: '0.1.0' }, exportedAt: new Date().toISOString(),
+    provider, adapterVersion: '0.1.0', map, catalog: { generation, fingerprint: 'pending' },
+    coverage: { categories: [], levels: [], complete: false }, records: catalog };
+  const checked = validateTransfer(base);
+  const metadata = checked.records.map(row => JSON.stringify([row.id, row.map, row.category, row.level,
+    row.position === null ? null : [row.position.x, row.position.y, row.position.space]])).sort().map(row => JSON.parse(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([provider, map, metadata])));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  schema.array(foundIds, TRANSFER_LIMITS.RECORDS);
+  const ids = [...new Set(foundIds.map(id => schema.text(id, TRANSFER_LIMITS.ID)))].sort();
+  const byId = new Map(checked.records.map(row => [row.id, row])); let unknown = 0;
+  const records = ids.map(id => {
+    const row = byId.get(id);
+    if (row) return { ...row, state: true };
+    unknown++;
+    return { id, map, category: null, level: null, state: true, position: null };
+  });
+  const categories = [...new Set(records.map(row => row.category).filter(value => value !== null))].sort();
+  const envelope = validateTransfer({ ...base, catalog: { generation, fingerprint }, records,
+    coverage: { categories: categories.length <= TRANSFER_LIMITS.COVERAGE ? categories : [], levels: [], complete: false } });
+  return { envelope, summary: { found: records.length, unknown } };
+}
+
+module.exports = { buildSourceTransfer };
+
+},
+5:function(require,module,exports){
 module.exports={"provider":"bwiki","adapterVersion":"0.1.0","status":"unavailable","variants":[{"id":"map4-indexeddb","origins":["https://wiki.biligame.com"],"map":"bwiki:ys:Data:Map4","generation":"Data:Map4:revision689825","accountTier":"browser-local","browser":{"family":"chromium","version":""},"catalogFingerprint":"cff6390377fdb63b2e99b3546455e2f2889ced9bc3ba70974d58b9e7eaeba763","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point2.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point3.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point4.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point5.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point6.json"}],"statePaths":["onchoose","indexedDB.wikiYSMap4Data.pointsOnchoose"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"catalog-incomplete-and-acceptance-pending"},{"id":"map4-localstorage-fallback","origins":["https://wiki.biligame.com"],"map":"bwiki:ys:Data:Map4","generation":"Data:Map4:revision689825","accountTier":"browser-local","browser":{"family":"chromium","version":""},"catalogFingerprint":"cff6390377fdb63b2e99b3546455e2f2889ced9bc3ba70974d58b9e7eaeba763","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point2.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point3.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point4.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point5.json"},{"method":"GET","origin":"https://wiki.biligame.com","path":"/ys/Data:Map4/point6.json"}],"statePaths":["onchoose","localStorage.wikiMap_ys_Data:Map4_Data"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"fallback-save-acceptance-pending"}],"reasonCode":"catalog-incomplete-and-acceptance-pending"};
+},
+6:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, serializeTransfer } = require(0);
+const { buildSourceTransfer } = require(4);
+const { MAP, snapshotCatalog, markerId, category } = require(7);
+const KEY = 'wikiMap_ys_Data:Map4_Data';
+const DB = 'wikiYSMap4Data';
+const SHARDS = ['point.json', 'point2.json', 'point3.json', 'point4.json', 'point5.json', 'point6.json'];
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function context(window) {
+  if (window.location?.origin !== 'https://wiki.biligame.com' || !window.location.pathname?.startsWith('/ys/')) fail('wrong-site');
+  if (window.mw?.config?.get('wgGameName') !== 'ys' || window.mw.config.get('wgRevisionId') !== 690410
+    || window.mapData?.dataPrefix !== 'Data:Map4' || JSON.stringify(window.mapData.dataList) !== JSON.stringify(SHARDS)
+    || window.mapPackage?.wikiData?._wgGameName !== 'ys' || window.markEmbedType) fail('site-version-changed');
+  // Vue's mounted root vnode exposes the existing component. No app creation,
+  // method invocation, filtered computed catalog, or marker/UI setters.
+  const root = window.document?.querySelector('#app');
+  const instance = root?._vnode?.component?.proxy || root?.__vue_app__?._instance?.proxy;
+  if (!instance || typeof instance.indexedDBState !== 'boolean' || instance.storageName?.data !== KEY || instance.daDian?.show !== false) fail('site-not-ready');
+  return { instance, useIDB: instance.indexedDBState, catalog: snapshotCatalog(window.pointsData), progress: progressSnapshot(instance.onchoose) };
+}
+function time(value) {
+  if (!Number.isSafeInteger(value) || value <= 0) fail('invalid-progress');
+  return value;
+}
+function progressSnapshot(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('invalid-progress');
+  const entries = [];
+  for (const [type, marks] of Object.entries(value)) {
+    category(type, 'invalid-progress');
+    if (!marks || typeof marks !== 'object' || Array.isArray(marks)) fail('invalid-progress');
+    for (const [id, timestamp] of Object.entries(marks)) {
+      if (entries.length >= TRANSFER_LIMITS.RECORDS) fail('invalid-progress');
+      entries.push([markerId(id, 'invalid-progress'), type, time(timestamp)]);
+    }
+  }
+  entries.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return { ids: [...new Set(entries.map(row => row[0]))].sort(), signature: JSON.stringify(entries) };
+}
+function readFallback(window) {
+  let raw;
+  try { raw = window.localStorage.getItem(KEY); } catch { fail('save-unavailable'); }
+  // A brand-new fallback save may be absent. Never import the old map's data
+  // or merge another persistence backend; equality with onchoose is required.
+  if (raw === null) return progressSnapshot({});
+  if (typeof raw !== 'string' || new TextEncoder().encode(raw).byteLength > TRANSFER_LIMITS.BYTES) fail('invalid-progress');
+  let parsed; try { parsed = JSON.parse(raw); } catch { fail('invalid-progress'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Object.hasOwn(parsed, 'data')) fail('invalid-progress');
+  return progressSnapshot(parsed.data);
+}
+async function readDatabase(window) {
+  const indexedDB = window.indexedDB;
+  if (typeof indexedDB?.databases !== 'function') fail('save-unavailable');
+  let databases;
+  try { databases = await indexedDB.databases(); } catch { fail('save-unavailable'); }
+  if (!Array.isArray(databases) || !databases.some(item => item.name === DB && item.version === 1)) fail('save-unavailable');
+  return new Promise((resolve, reject) => {
+    let request, db, finished = false;
+    const end = (error, result) => {
+      if (finished) return; finished = true; clearTimeout(timer);
+      db?.close(); error ? reject(Object.assign(new Error(error), { code: error })) : resolve(result);
+    };
+    const timer = setTimeout(() => end('save-unavailable'), 10000);
+    try {
+      // No version argument. A disappearance race is handled by aborting the
+      // upgrade transaction, so this reader never creates a database/store.
+      request = indexedDB.open(DB);
+      request.onupgradeneeded = () => { request.transaction?.abort(); end('save-unavailable'); };
+      request.onerror = request.onblocked = () => end('save-unavailable');
+      request.onsuccess = () => {
+        db = request.result;
+        if (finished) { db.close(); return; }
+        try {
+          if (db.version !== 1 || !db.objectStoreNames.contains('pointsOnchoose')) return end('save-unavailable');
+          const transaction = db.transaction(['pointsOnchoose'], 'readonly');
+          const store = transaction.objectStore('pointsOnchoose');
+          if (store.keyPath !== 'id') return end('save-unavailable');
+          let snapshot;
+          const read = store.getAll();
+          read.onsuccess = () => {
+            try {
+              if (!Array.isArray(read.result) || read.result.length > TRANSFER_LIMITS.RECORDS) fail('invalid-progress');
+              const grouped = Object.create(null);
+              for (const row of read.result) {
+                const type = category(row?.type, 'invalid-progress'), id = markerId(row?.id, 'invalid-progress');
+                grouped[type] ||= Object.create(null);
+                if (Object.hasOwn(grouped[type], id)) fail('invalid-progress');
+                grouped[type][id] = time(row.time);
+              }
+              snapshot = progressSnapshot(grouped);
+            } catch { end('invalid-progress'); }
+          };
+          read.onerror = transaction.onabort = transaction.onerror = () => end('save-unavailable');
+          transaction.oncomplete = () => snapshot ? end(null, snapshot) : end('save-unavailable');
+        } catch { end('save-unavailable'); }
+      };
+    } catch { end('save-unavailable'); }
+  });
+}
+async function exportBwiki(window) {
+  const initial = context(window);
+  function assertCurrent() {
+    const current = context(window);
+    if (current.instance !== initial.instance || current.useIDB !== initial.useIDB) fail('save-changed');
+    if (current.catalog.signature !== initial.catalog.signature) fail('catalog-changed');
+    if (current.progress.signature !== initial.progress.signature) fail('progress-changed');
+  }
+  const read = () => initial.useIDB ? readDatabase(window) : readFallback(window);
+  const persisted = await read(); assertCurrent();
+  if (persisted.signature !== initial.progress.signature) fail('progress-changed');
+  const result = await buildSourceTransfer({ provider: 'bwiki', map: MAP, generation: 'Data:Map4:revision690410', catalog: initial.catalog.records, foundIds: persisted.ids });
+  const after = await read(); assertCurrent();
+  if (after.signature !== persisted.signature) fail('progress-changed');
+  return { ...result, conflicts: initial.catalog.conflicts.length, assertCurrent };
+}
+const ERRORS = {
+  'wrong-site': 'Open https://wiki.biligame.com/ys/大地图 and run the script on that map.',
+  'site-version-changed': 'The BWIKI Map4 page changed or is a different map. Use an updated source script.',
+  'site-not-ready': 'Wait for the complete BWIKI map to load and leave point editing before retrying.',
+  'catalog-unavailable': 'The complete loaded BWIKI catalog is unavailable or has an unexpected format. Reload the map and retry.',
+  'save-unavailable': 'The active BWIKI save could not be read safely. No file was exported.',
+  'save-changed': 'The active BWIKI save changed. Run the script again.',
+  'catalog-changed': 'The BWIKI catalog changed during export. Run the script again.',
+  'progress-changed': 'BWIKI progress is still loading, saving, or changed during export. Wait and run the script again.',
+  'invalid-progress': 'BWIKI returned an unexpected mark format. No file was exported.',
+};
+async function runSourceExport({ window, fetch, download, console }) {
+  try {
+    const result = await exportBwiki(window);
+    const bytes = serializeTransfer(result.envelope); result.assertCurrent();
+    await download('genshin-bwiki-progress.json', bytes);
+    console.log('BWIKI export: download requested for ' + result.summary.found + ' marked points; ' + result.summary.unknown + ' unknown IDs retain progress without mapping metadata.');
+    if (result.conflicts) console.warn('BWIKI catalog: ' + result.conflicts + ' conflicting IDs excluded from coordinate mapping. Their marked progress is retained as unknown IDs.');
+    console.log('Save genshin-bwiki-progress.json. In the overlay, open Profiles & transfers, select BWIKI, choose the file, review the preview, then apply.');
+    if (!result.summary.found) console.warn('No marked BWIKI points were returned. Check the intended browser save before importing.');
+  } catch (error) {
+    const code = Object.hasOwn(ERRORS, error?.code) ? error.code : 'source-export-failed';
+    console.error('BWIKI export stopped (' + code + '): ' + (ERRORS[code] || 'The source file could not be exported. Reload the map and retry.'));
+  }
+}
+module.exports = { exportBwiki, runSourceExport };
+
+},
+7:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS } = require(0);
+const MAP = 'bwiki:ys:Data:Map4';
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function id(value, code = 'catalog-unavailable') {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) value = String(value);
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value) || value.length > TRANSFER_LIMITS.ID || ['__proto__', 'constructor', 'prototype'].includes(value)) fail(code);
+  return value;
+}
+function category(value, code = 'catalog-unavailable') {
+  const result = typeof value === 'number' ? String(value) : value;
+  if (typeof result !== 'string' || !/^[1-9]\d*$/.test(result) || !Number.isSafeInteger(Number(result))) fail(code);
+  return result;
+}
+function coordinate(value) {
+  if (typeof value === 'string') {
+    value = value.trim();
+    if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) fail('catalog-unavailable');
+    value = Number(value);
+  }
+  if (!Number.isFinite(value) || Math.abs(value) > TRANSFER_LIMITS.COORDINATE) fail('catalog-unavailable');
+  return value || 0;
+}
+
+/** Native input is loaded window.pointsData: {[markType]: row[]}; flat row[]
+ * is also accepted for offline mapping. Rows use id, markType, point.lng/lat,
+ * optional version 4 and optional raw layer. No provider floor is inferred.
+ */
+function snapshotCatalog(native) {
+  if (!native || typeof native !== 'object') fail('catalog-unavailable');
+  const groups = Array.isArray(native) ? [[null, native]] : Object.entries(native);
+  if (!groups.length) fail('catalog-unavailable');
+  const byId = new Map(), conflicts = new Set(), signature = [];
+  let count = 0;
+  for (const [key, rows] of groups) {
+    if (key !== null) category(key);
+    if (!Array.isArray(rows)) fail('catalog-unavailable');
+    for (const raw of rows) {
+      if (++count > TRANSFER_LIMITS.RECORDS || !raw || typeof raw !== 'object') fail('catalog-unavailable');
+      const markerId = id(raw.id), markType = category(raw.markType);
+      // Live Map4 includes stale category containers. Such IDs cannot gain
+      // mapping metadata from either occurrence, but remain valid progress IDs.
+      if (key !== null && markType !== key) conflicts.add(markerId);
+      if (raw.version !== undefined && raw.version !== 4 && raw.version !== '4') fail('catalog-unavailable');
+      const layer = raw.layer === undefined || raw.layer === '' ? null : raw.layer;
+      if (layer !== null && (typeof layer !== 'string' || layer.length > TRANSFER_LIMITS.ID)) fail('catalog-unavailable');
+      const record = { id: markerId, map: MAP, category: markType, level: layer !== null && layer !== 'G' ? 'bwiki:unreviewed-layer' : null, state: true, position: {
+        x: coordinate(raw.point?.lng), y: coordinate(raw.point?.lat), space: raw.version === undefined ? 'bwiki:lng-lat:legacy' : 'bwiki:lng-lat:v4',
+      } };
+      const encoded = JSON.stringify([record, layer]);
+      signature.push(JSON.stringify([key, record, layer]));
+      if (byId.has(markerId) && byId.get(markerId).encoded !== encoded) conflicts.add(markerId);
+      else if (!byId.has(markerId)) byId.set(markerId, { record, encoded });
+    }
+  }
+  if (!count) fail('catalog-unavailable');
+  const records = [...byId.values()].map(item => item.record).filter(row => !conflicts.has(row.id)).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return { records, conflicts: [...conflicts].sort(), signature: JSON.stringify(signature.sort()) };
+}
+function normalizeCatalog(native) { return snapshotCatalog(native).records; }
+module.exports = { MAP, normalizeCatalog, snapshotCatalog, markerId: id, category };
+
 }
 };
 const cache=Object.create(null);

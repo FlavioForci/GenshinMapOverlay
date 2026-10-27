@@ -13,7 +13,9 @@ const ASSETS = Object.freeze([
   'src/main.js', 'src/config.js', 'src/shared/i18n.js', 'src/overlay/overlay.css', 'assets/icon.png',
   ...['index.html', 'preload.js', 'settings.js', 'settings.css', 'window.js'].map(name => 'src/settings/' + name),
   ...['schema', 'atomic-file', 'repository', 'merge', 'profiles', 'migration', 'backup', 'service', 'runtime', 'ipc', 'client-barrier', 'app-lifecycle'].map(name => 'src/progress/' + name + '.js'),
-  ...['envelope', 'attachments', 'catalog', 'mapping', 'spatial-index', 'capabilities', 'registry', 'planner', 'controller', 'ipc', 'runtime', 'browser/runtime', 'browser/ui'].map(name => 'src/transfer/' + name + '.js'),
+  ...['envelope', 'attachments', 'catalog', 'mapping', 'spatial-index', 'capabilities', 'registry', 'planner', 'controller', 'ipc', 'runtime', 'source-mapping', 'bundled-mappings', 'browser/runtime', 'browser/ui', 'browser/source'].map(name => 'src/transfer/' + name + '.js'),
+  ...['appsample', 'hoyolab', 'kongying', 'bwiki'].flatMap(id => ['reader.js', 'normalize.js'].map(file => 'src/transfer/providers/' + id + '/' + file)),
+  ...['hoyolab', 'kongying', 'bwiki'].flatMap(id => ['mapping.json', 'mapping-targets.json'].map(file => 'src/transfer/providers/' + id + '/' + file)),
   'docs/map-transfers.md',
 ]);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');

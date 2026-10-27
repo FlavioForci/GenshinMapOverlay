@@ -16,7 +16,7 @@ test('import defaults new, all counters and coverage are visible as text, provid
   const f = await setup(); assert.equal(f.$('transfer-mode').value, 'new'); await f.$('transfer-preview').click();
   for (const [key, value] of Object.entries(counts)) assert.match(f.$('transfer-counts').textContent, new RegExp(String(value)));
   assert.match(f.$('transfer-coverage').textContent, /<img src=x>/); assert.equal(f.$('transfer-coverage').children.length, 0); assert.equal(f.$('transfer-apply').disabled, false);
-  assert.match(f.$('transfer-capabilities').textContent, /first-party-progress-interface-unavailable/); assert.match(f.$('transfer-capabilities').textContent, /catalog-incomplete-and-acceptance-pending/);
+  assert.match(f.$('transfer-capabilities').textContent, /signed-in-source-and-destination-acceptance-pending/); assert.match(f.$('transfer-capabilities').textContent, /catalog-incomplete-and-acceptance-pending/);
   f.mounted.dispose();
 });
 test('canceled picker clears the preview; invalid count is displayed and apply disabled', async () => {

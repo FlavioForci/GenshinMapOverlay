@@ -16,7 +16,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),

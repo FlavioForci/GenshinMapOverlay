@@ -161,7 +161,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),
@@ -683,10 +683,228 @@ module.exports = { createTransferUi };
 
 },
 4:function(require,module,exports){
-module.exports={"provider":"appsample","adapterVersion":"0.1.0","status":"unavailable","variants":[{"id":"current-web","origins":["https://genshin-impact-map.appsample.com"],"map":"appsample:gim:2","generation":"next:g2A_0C3iZKpNbinJgViG_","accountTier":"unverified","browser":{"family":"chromium","version":""},"catalogFingerprint":"e0a6b038c223b3a33a51393aac12afdfe9256edaf2f1343d8afb4ce699386e4c","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://game-data.lemonapi.com","path":"/gim/markers_all.v5.compressed.json"},{"method":"GET","origin":"https://genshin-impact-map.appsample.com","path":"/api/markerNames.json"}],"statePaths":[],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"first-party-progress-interface-unavailable"}],"reasonCode":"first-party-progress-interface-unavailable"};
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer, attachmentSchema: schema } = require(0);
+
+/** Shared source-file contract. Catalog hashes match the main-process research
+ * tool so reviewed mapping assets and independent browser reads share identity.
+ * Only explicit found IDs become records; missing IDs never mean not-found.
+ */
+async function buildSourceTransfer({ provider, map, generation, catalog, foundIds }) {
+  const base = { format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay source', version: '0.1.0' }, exportedAt: new Date().toISOString(),
+    provider, adapterVersion: '0.1.0', map, catalog: { generation, fingerprint: 'pending' },
+    coverage: { categories: [], levels: [], complete: false }, records: catalog };
+  const checked = validateTransfer(base);
+  const metadata = checked.records.map(row => JSON.stringify([row.id, row.map, row.category, row.level,
+    row.position === null ? null : [row.position.x, row.position.y, row.position.space]])).sort().map(row => JSON.parse(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([provider, map, metadata])));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  schema.array(foundIds, TRANSFER_LIMITS.RECORDS);
+  const ids = [...new Set(foundIds.map(id => schema.text(id, TRANSFER_LIMITS.ID)))].sort();
+  const byId = new Map(checked.records.map(row => [row.id, row])); let unknown = 0;
+  const records = ids.map(id => {
+    const row = byId.get(id);
+    if (row) return { ...row, state: true };
+    unknown++;
+    return { id, map, category: null, level: null, state: true, position: null };
+  });
+  const categories = [...new Set(records.map(row => row.category).filter(value => value !== null))].sort();
+  const envelope = validateTransfer({ ...base, catalog: { generation, fingerprint }, records,
+    coverage: { categories: categories.length <= TRANSFER_LIMITS.COVERAGE ? categories : [], levels: [], complete: false } });
+  return { envelope, summary: { found: records.length, unknown } };
+}
+
+module.exports = { buildSourceTransfer };
+
+},
+5:function(require,module,exports){
+module.exports={"provider":"appsample","adapterVersion":"0.1.0","status":"planned","variants":[{"id":"current-web","origins":["https://genshin-impact-map.appsample.com"],"map":"appsample:gim:2","generation":"next:g2A_0C3iZKpNbinJgViG_","accountTier":"unverified","browser":{"family":"chromium","version":""},"catalogFingerprint":"e0a6b038c223b3a33a51393aac12afdfe9256edaf2f1343d8afb4ce699386e4c","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://game-data.lemonapi.com","path":"/gim/markers_all.v5.compressed.json"},{"method":"GET","origin":"https://genshin-impact-map.appsample.com","path":"/api/markerNames.json"}],"statePaths":["site.modules.9302.Z.get(users,uid).markerIds","site.modules.3580.gz","window._store.getState().user.user.uid","localStorage.gim-local-markers.markerIds"],"evidence":{"checkedAt":"2026-10-27","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"signed-in-source-and-destination-acceptance-pending"}],"reasonCode":"signed-in-source-and-destination-acceptance-pending"};
+},
+6:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, serializeTransfer } = require(0);
+const { snapshotCatalog, normalizeProgress } = require(7);
+
+// First-party source inspected 2026-10-27. Pin both build and app bundle: the
+// build ID alone need not change when a deployment's assets are replaced.
+const BUILD = 'g2A_0C3iZKpNbinJgViG_';
+const APP = '/_next/static/chunks/pages/_app-1e81edb09414b5db.js';
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function checkPage(window) {
+  if (window.location?.origin !== 'https://genshin-impact-map.appsample.com') fail('wrong-site');
+  let data;
+  try { data = JSON.parse(window.document.querySelector('#__NEXT_DATA__')?.textContent || 'null'); } catch { fail('site-version-changed'); }
+  if (data?.buildId !== BUILD || !Array.from(window.document.scripts).some(script => {
+    try { const url = new URL(script.src, window.location.href); return url.origin === window.location.origin && url.pathname === APP; } catch { return false; }
+  })) fail('site-version-changed');
+}
+function siteModules(window) {
+  const chunks = window.webpackChunk_N_E;
+  if (!Array.isArray(chunks)) fail('site-not-ready');
+  let load;
+  // Obtain the existing module reader with an empty, unique webpack chunk.
+  // Register no module factories, replace no functions, load no remote code.
+  const entry = [['gmo-source-' + globalThis.crypto.randomUUID()], {}, runtime => { load = runtime; }];
+  try { chunks.push(entry); } catch { fail('site-not-ready'); }
+  finally { if (chunks[chunks.length - 1] === entry) chunks.pop(); }
+  if (typeof load !== 'function') fail('site-not-ready');
+  try { return { cloud: load(9302).Z, catalog: load(3580), config: load(3951) }; } catch { fail('site-version-changed'); }
+}
+function account(window, modules) {
+  checkPage(window);
+  const { cloud, config } = modules;
+  if (config.lw !== 'gim' || cloud?.app !== 'gim' || typeof cloud.get !== 'function') fail('site-version-changed');
+  const uid = cloud.auth?.currentUser?.uid;
+  if (typeof uid !== 'string' || !uid || cloud.uid !== uid || window._store?.getState?.()?.user?.user?.uid !== uid) fail('sign-in-required');
+  return uid;
+}
+function legacyProgress(window) {
+  let raw;
+  try { raw = window.localStorage.getItem('gim-local-markers'); } catch { fail('local-progress-unavailable'); }
+  if (raw === null || raw === 'undefined') return { raw, ids: [] };
+  if (typeof raw !== 'string' || new TextEncoder().encode(raw).byteLength > TRANSFER_LIMITS.BYTES) fail('invalid-local-progress');
+  let value; try { value = JSON.parse(raw); } catch { fail('invalid-local-progress'); }
+  if (!value || typeof value !== 'object' || !Array.isArray(value.markerIds)) fail('invalid-local-progress');
+  return { raw, ids: value.markerIds };
+}
+
+/** Read progress in the site's signed-in session. No tokens leave the site,
+ * no marker setters are called, and read errors never become empty exports.
+ */
+async function exportAppSample(window) {
+  checkPage(window);
+  const modules = siteModules(window);
+  if (typeof modules.cloud?.auth?.authStateReady === 'function') await modules.cloud.auth.authStateReady();
+  const uid = account(window, modules);
+  const catalog = snapshotCatalog(modules.catalog.gz);
+  const legacy = legacyProgress(window);
+  function assertCurrent() {
+    let current; try { current = account(window, modules); } catch { fail('account-changed'); }
+    if (current !== uid) fail('account-changed');
+    if (snapshotCatalog(modules.catalog.gz).signature !== catalog.signature) fail('catalog-changed');
+    if (legacyProgress(window).raw !== legacy.raw) fail('progress-changed');
+  }
+  let document;
+  try { document = await modules.cloud.get('users', uid); } catch { fail('cloud-read-failed'); }
+  assertCurrent();
+  if (document !== undefined && (document === null || typeof document !== 'object' || Array.isArray(document))) fail('invalid-progress');
+  // The site's get() returns undefined for a nonexistent user document; a
+  // document without markerIds also represents no saved cloud marks.
+  const cloudIds = document && Object.hasOwn(document, 'markerIds') ? document.markerIds : [];
+  const result = await normalizeProgress({ catalog, cloudIds, localIds: legacy.ids, generation: 'next:' + BUILD + ':app:1e81edb09414b5db' });
+  assertCurrent();
+  return { ...result, assertCurrent };
+}
+
+const ERRORS = Object.freeze({
+  'wrong-site': 'Open https://genshin-impact-map.appsample.com/ and run this script there.',
+  'site-version-changed': 'AppSample has changed. Use an updated overlay source script.',
+  'site-not-ready': 'Wait for the AppSample map to finish loading, then run the script again.',
+  'sign-in-required': 'Sign in to AppSample, wait for your found markers to load, then run the script again.',
+  'cloud-read-failed': 'Could not read your AppSample cloud save. Check your connection and sign-in, then retry.',
+  'account-changed': 'Your AppSample account changed during export. Run the script again for the intended account.',
+  'catalog-unavailable': 'The full AppSample marker catalog is not ready or has an unexpected format. Reload the map and retry.',
+  'catalog-changed': 'The AppSample marker catalog changed during export. Run the script again.',
+  'progress-changed': 'Browser-local progress changed during export. Run the script again.',
+  'invalid-progress': 'AppSample returned an unexpected saved-marker format. No file was exported.',
+  'invalid-local-progress': 'AppSample browser-local progress has an unexpected format. No file was exported.',
+  'local-progress-unavailable': 'The browser did not allow reading AppSample local progress. No file was exported.',
+});
+async function runSourceExport({ window, download, console }) {
+  try {
+    const result = await exportAppSample(window);
+    const bytes = serializeTransfer(result.envelope);
+    result.assertCurrent();
+    await download('genshin-appsample-progress.json', bytes);
+    const { found, otherMaps, unknown } = result.summary;
+    console.log('AppSample export: download requested for ' + found + ' found Teyvat markers. ' + otherMaps + ' found markers on other maps and ' + unknown + ' unknown marker IDs were excluded.');
+    console.log('Save genshin-appsample-progress.json. In the overlay, open Profiles & transfers, select AppSample, choose the file, review the preview, then apply.');
+    if (!found) console.warn('No found Teyvat markers were returned. Check that you signed in to the intended AppSample account before importing this file.');
+  } catch (error) {
+    const code = Object.hasOwn(ERRORS, error?.code) ? error.code : 'source-export-failed';
+    console.error('AppSample export stopped (' + code + '): ' + (ERRORS[code] || 'The source file could not be exported. Reload AppSample and try again.'));
+  }
+}
+module.exports = { exportAppSample, runSourceExport };
+
+},
+7:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer } = require(0);
+const MAP = 'appsample:gim:2';
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function markerId(value) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return String(value);
+  if (typeof value === 'string' && /^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value))) return value;
+  fail('invalid-progress');
+}
+function progressIds(value) {
+  if (!Array.isArray(value) || value.length > TRANSFER_LIMITS.RECORDS) fail('invalid-progress');
+  return value.map(markerId);
+}
+
+/** Snapshot the decoded catalog exported by the site's module 3580. Raw `level`
+ * is deliberately excluded: it controls marker features, not validated floors.
+ */
+function snapshotCatalog(catalog) {
+  if (!catalog || typeof catalog !== 'object' || !catalog[2] || !Object.keys(catalog[2]).length) fail('catalog-unavailable');
+  const byId = new Map();
+  for (const [map, categories] of Object.entries(catalog)) {
+    if (!/^[1-9]\d*$/.test(map) || !categories || typeof categories !== 'object') fail('catalog-unavailable');
+    for (const [category, rows] of Object.entries(categories)) {
+      if (!category || category.length > TRANSFER_LIMITS.ID || !Array.isArray(rows)) fail('catalog-unavailable');
+      for (const row of rows) {
+        let id; try { id = markerId(row?.id); } catch { fail('catalog-unavailable'); }
+        if (byId.size >= TRANSFER_LIMITS.RECORDS || byId.has(id) || row.mid !== Number(map) || row.type !== category
+          || !Number.isFinite(row.lng) || !Number.isFinite(row.lat)
+          || Math.abs(row.lng) > TRANSFER_LIMITS.COORDINATE || Math.abs(row.lat) > TRANSFER_LIMITS.COORDINATE) fail('catalog-unavailable');
+        byId.set(id, { id, map: 'appsample:gim:' + map, category, level: null, state: true,
+          position: { x: row.lng || 0, y: row.lat || 0, space: 'appsample-normalized' } });
+      }
+    }
+  }
+  const rows = [...byId.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const teyvat = rows.filter(row => row.map === MAP);
+  if (!teyvat.length) fail('catalog-unavailable');
+  return { byId, teyvat, signature: JSON.stringify(rows) };
+}
+
+/** Only known Teyvat IDs enter a Teyvat envelope. Unknown IDs cannot safely be
+ * assigned a map; the caller reports their count, alongside other-map marks.
+ */
+async function normalizeProgress({ catalog, cloudIds, localIds, generation }) {
+  const cloud = progressIds(cloudIds);
+  let local; try { local = progressIds(localIds); } catch { fail('invalid-local-progress'); }
+  const found = new Set([...cloud, ...local]);
+  if (found.size > TRANSFER_LIMITS.RECORDS) fail('invalid-progress');
+  const records = []; let otherMaps = 0, unknown = 0;
+  for (const id of found) {
+    const row = catalog.byId.get(id);
+    if (!row) unknown++;
+    else if (row.map !== MAP) otherMaps++;
+    else records.push(row);
+  }
+  records.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(catalog.teyvat)));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  const envelope = validateTransfer({
+    format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay AppSample source', version: '0.1.0' },
+    exportedAt: new Date().toISOString(), provider: 'appsample', adapterVersion: '0.1.0', map: MAP,
+    catalog: { generation, fingerprint },
+    coverage: { categories: [...new Set(records.map(row => row.category))].sort(), levels: [], complete: false }, records,
+  });
+  return { envelope, summary: { found: records.length, otherMaps, unknown } };
+}
+
+module.exports = { snapshotCatalog, normalizeProgress };
+
 }
 };
 const cache=Object.create(null);
 function require(id){if(!Object.prototype.hasOwnProperty.call(modules,id))throw new Error("bundle-dependency");if(!cache[id]){const module={exports:{}};cache[id]=module;modules[id](require,module,module.exports);}return cache[id].exports;}
-console.error("appsample export unavailable: first-party-progress-interface-unavailable. Use app-local progress files until a verified adapter and disposable-save acceptance are available.");
+const {runSourceExport}=require(6);
+const download=async function(name,bytes){const url=URL.createObjectURL(new Blob([bytes],{type:'application/json'}));const link=document.createElement('a');try{link.href=url;link.download=name;document.body.appendChild(link);link.click();}finally{link.remove();setTimeout(function(){URL.revokeObjectURL(url);},1000);}};
+await runSourceExport({window,fetch,download,console});
 })().catch(function(){console.error("Transfer unavailable: UI or verified adapter could not start. Respect site security; do not bypass CSP.");});

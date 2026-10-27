@@ -114,11 +114,12 @@ test('main-only report lookup is token/context/revision/catalog checked and deta
   await f.service.setFound(f.ctx(), { id: 42, found: false }); await assert.rejects(f.runtime.controller.readImportReport(f.ctx(), p.value.id), { code: 'stale-preview' });
   const p2 = await preview(f); f.refresh(); await assert.rejects(f.runtime.controller.readImportReport(f.ctx(), p2.value.id), { code: 'stale-preview' });
 });
-test('local normalized planned-provider imports and exports work; site scripts stay failclosed', async t => {
+test('local normalized imports and exports work; saving the AppSample source script preserves its bundled bytes', async t => {
   const f = await setup(t); const providers = await f.call('providers'); assert.equal(providers.length, 5); assert.ok(providers.every(p => p.status !== 'supported'));
   const p = await preview(f); const applied = await f.call('applyImport', f.ctx(), { previewId: p.value.id }); assert.equal(applied.ok, true); assert.deepEqual(applied.value.snapshot.activeProfile.foundIds, [42]);
   const r = await f.call('exportProfile', f.ctx(), { provider: 'appsample', map: 'appsample:gim:2' }); assert.equal(r.ok, true); assert.equal(r.value.counts.matched, 1); const out = JSON.parse(await fs.readFile(f.output)); assert.equal(out.records[0].id, '42');
-  assert.equal((await f.call('saveScript', 'appsample', 'export')).ok, true); const script = await fs.readFile(f.output, 'utf8'); assert.match(script, /first-party-progress-interface-unavailable/);
+  assert.equal((await f.call('saveScript', 'appsample', 'export')).ok, true); const script = await fs.readFile(f.output, 'utf8');
+  assert.equal(script, await fs.readFile(path.resolve(__dirname, '../../src/transfer/scripts/appsample-export.js'), 'utf8'));
   f.runtime.dispose(); assert.equal(f.handlers.size, 0);
 });
 test('expired report/apply tokens, sparse oversized input and bounded invalid issues fail without mutating profiles', async t => {

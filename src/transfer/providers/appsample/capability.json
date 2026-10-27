@@ -1,7 +1,7 @@
 {
   "provider": "appsample",
   "adapterVersion": "0.1.0",
-  "status": "unavailable",
+  "status": "planned",
   "variants": [
     {
       "id": "current-web",
@@ -32,9 +32,14 @@
           "path": "/api/markerNames.json"
         }
       ],
-      "statePaths": [],
+      "statePaths": [
+        "site.modules.9302.Z.get(users,uid).markerIds",
+        "site.modules.3580.gz",
+        "window._store.getState().user.user.uid",
+        "localStorage.gim-local-markers.markerIds"
+      ],
       "evidence": {
-        "checkedAt": "2026-10-24",
+        "checkedAt": "2026-10-27",
         "read": false,
         "write": false,
         "reload": false,
@@ -42,8 +47,8 @@
         "pairAccepted": false,
         "restore": false
       },
-      "reasonCode": "first-party-progress-interface-unavailable"
+      "reasonCode": "signed-in-source-and-destination-acceptance-pending"
     }
   ],
-  "reasonCode": "first-party-progress-interface-unavailable"
+  "reasonCode": "signed-in-source-and-destination-acceptance-pending"
 }

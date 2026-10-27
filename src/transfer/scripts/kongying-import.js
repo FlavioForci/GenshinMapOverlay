@@ -161,7 +161,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),
@@ -683,7 +683,236 @@ module.exports = { createTransferUi };
 
 },
 4:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer, attachmentSchema: schema } = require(0);
+
+/** Shared source-file contract. Catalog hashes match the main-process research
+ * tool so reviewed mapping assets and independent browser reads share identity.
+ * Only explicit found IDs become records; missing IDs never mean not-found.
+ */
+async function buildSourceTransfer({ provider, map, generation, catalog, foundIds }) {
+  const base = { format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay source', version: '0.1.0' }, exportedAt: new Date().toISOString(),
+    provider, adapterVersion: '0.1.0', map, catalog: { generation, fingerprint: 'pending' },
+    coverage: { categories: [], levels: [], complete: false }, records: catalog };
+  const checked = validateTransfer(base);
+  const metadata = checked.records.map(row => JSON.stringify([row.id, row.map, row.category, row.level,
+    row.position === null ? null : [row.position.x, row.position.y, row.position.space]])).sort().map(row => JSON.parse(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([provider, map, metadata])));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  schema.array(foundIds, TRANSFER_LIMITS.RECORDS);
+  const ids = [...new Set(foundIds.map(id => schema.text(id, TRANSFER_LIMITS.ID)))].sort();
+  const byId = new Map(checked.records.map(row => [row.id, row])); let unknown = 0;
+  const records = ids.map(id => {
+    const row = byId.get(id);
+    if (row) return { ...row, state: true };
+    unknown++;
+    return { id, map, category: null, level: null, state: true, position: null };
+  });
+  const categories = [...new Set(records.map(row => row.category).filter(value => value !== null))].sort();
+  const envelope = validateTransfer({ ...base, catalog: { generation, fingerprint }, records,
+    coverage: { categories: categories.length <= TRANSFER_LIMITS.COVERAGE ? categories : [], levels: [], complete: false } });
+  return { envelope, summary: { found: records.length, unknown } };
+}
+
+module.exports = { buildSourceTransfer };
+
+},
+5:function(require,module,exports){
 module.exports={"provider":"kongying","adapterVersion":"0.1.0","status":"unavailable","variants":[{"id":"v3-web-local","origins":["https://v3.yuanshen.site"],"map":"kongying:v3:teyvat","generation":"index.6b600c49:IndexPage.11f8966b","accountTier":"browser-local","browser":{"family":"chromium","version":""},"catalogFingerprint":"","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"POST","origin":"https://cloud.yuanshen.site","path":"/api/marker/get/list_byinfo"},{"method":"POST","origin":"https://cloud.yuanshen.site","path":"/api/marker/get/list_byid"},{"method":"GET","origin":"https://assets.yuanshen.site","path":"/webapp.json"}],"statePaths":["localStorage.marked_layers","localStorage.marked_timelayers"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"catalog-and-setter-verification-pending"},{"id":"v3-web-gitee-cloud","origins":["https://v3.yuanshen.site"],"map":"kongying:v3:teyvat","generation":"index.6b600c49:IndexPage.11f8966b","accountTier":"gitee-cloud","browser":{"family":"chromium","version":""},"catalogFingerprint":"","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"POST","origin":"https://cloud.yuanshen.site","path":"/api/marker/get/list_byinfo"},{"method":"POST","origin":"https://cloud.yuanshen.site","path":"/api/marker/get/list_byid"},{"method":"GET","origin":"https://assets.yuanshen.site","path":"/webapp.json"},{"method":"GET","origin":"https://gitee.com","path":"/api/v5/gists"},{"method":"PATCH","origin":"https://gitee.com","path":"/api/v5/gists/{id}"}],"statePaths":["localStorage.marked_layers","localStorage.marked_timelayers","localStorage._yuanshenmap_saveid","localStorage._yuanshenmap_save_time"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"selected-cloud-save-acceptance-pending"}],"reasonCode":"catalog-and-setter-verification-pending"};
+},
+6:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, serializeTransfer } = require(0);
+const { buildSourceTransfer } = require(4);
+const { normalizeCatalog, catalogScope, markerId } = require(7);
+const ORIGIN = 'https://v3.yuanshen.site';
+const INDEX = '/assets/index.6b600c49.js';
+const PAGE = '/assets/IndexPage.11f8966b.js';
+const GENERATION = 'index.6b600c49:IndexPage.11f8966b';
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function checkPage(window) {
+  if (window.location?.origin !== ORIGIN || window.location.pathname !== '/') fail('wrong-site');
+  const sameAsset = (source, pathname) => { try { const url = new URL(source, window.location.href); return url.origin === ORIGIN && url.pathname === pathname; } catch { return false; } };
+  if (!Array.from(window.document.scripts).some(script => sameAsset(script.src, INDEX))) fail('site-version-changed');
+  if (!window.document.querySelector('#map') || !window.performance?.getEntriesByType?.('resource')?.some(entry => sameAsset(entry.name, PAGE))) fail('site-not-ready');
+}
+function visitor(window) {
+  let cookies;
+  try { cookies = window.document.cookie; } catch { fail('visitor-required'); }
+  const matches = cookies.split(';').map(value => value.trim()).filter(value => value.startsWith('_yuanshen_map_usertoken='));
+  if (matches.length !== 1) fail('visitor-required');
+  let token; try { token = decodeURIComponent(matches[0].slice('_yuanshen_map_usertoken='.length)); } catch { fail('visitor-required'); }
+  if (!token || token.length > 16384 || /[\s\x00-\x1f\x7f]/.test(token)) fail('visitor-required');
+  return token;
+}
+function progress(window) {
+  const keys = ['marked_layers', 'marked_timelayers', '_yuanshenmap_saveid', '_yuanshenmap_save_time'];
+  let raw;
+  try { raw = keys.map(key => window.localStorage.getItem(key)); } catch { fail('local-progress-unavailable'); }
+  if (raw[0] === null || raw[1] === null) fail('site-not-ready');
+  if (raw.some(value => value !== null && (typeof value !== 'string' || new TextEncoder().encode(value).byteLength > TRANSFER_LIMITS.BYTES))) fail('invalid-progress');
+  let ids, timed;
+  try { ids = JSON.parse(raw[0]); timed = JSON.parse(raw[1]); } catch { fail('invalid-progress'); }
+  if (!Array.isArray(ids) || ids.length > TRANSFER_LIMITS.RECORDS || !timed || typeof timed !== 'object' || Array.isArray(timed) || Object.keys(timed).length > TRANSFER_LIMITS.RECORDS) fail('invalid-progress');
+  try { ids = ids.map(markerId); } catch { fail('invalid-progress'); }
+  return { raw: JSON.stringify(raw), ids: [...new Set(ids)], timed: Object.keys(timed).length };
+}
+async function readJSON(fetch, url, options) {
+  let response, text, value;
+  try { response = await fetch(url, { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', ...options }); } catch { fail('catalog-read-failed'); }
+  if (!response?.ok || response.status !== 200) fail('catalog-read-failed');
+  try {
+    text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > TRANSFER_LIMITS.BYTES) fail('catalog-too-large');
+    value = JSON.parse(text);
+  } catch (error) { if (error?.code === 'catalog-too-large') throw error; fail('catalog-unavailable'); }
+  return value;
+}
+async function exportKongying(window, fetch) {
+  checkPage(window);
+  const token = visitor(window), saved = progress(window), href = window.location.href;
+  function assertCurrent() {
+    try {
+      checkPage(window);
+      if (window.location.href !== href || visitor(window) !== token || progress(window).raw !== saved.raw) fail('context-changed');
+    } catch { fail('context-changed'); }
+  }
+  const config = await readJSON(fetch, 'https://assets.yuanshen.site/webapp.json', { method: 'GET' });
+  assertCurrent();
+  // Exact first-party visitor cookie -> fixed catalog routes, as in
+  // base_request.js. The token never enters output, logs or another service.
+  async function query(path, body) {
+    assertCurrent();
+    const value = await readJSON(fetch, 'https://cloud.yuanshen.site/api' + path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body),
+    });
+    assertCurrent();
+    if (value?.errorStatus !== 200 || !Array.isArray(value.data) || value.data.length > TRANSFER_LIMITS.RECORDS) fail('catalog-unavailable');
+    return value.data;
+  }
+  const areas = await query('/area/get/list', { isTraverse: true, parentId: -1 });
+  const scope = catalogScope(config, areas);
+  const body = areaIdList => ({ typeIdList: [], areaIdList, itemIdList: [], getBeta: 0 });
+  const markers = await query('/marker/get/list_byinfo', body(scope.teyvat));
+  const catalog = normalizeCatalog({ config, areas, areaIds: scope.teyvat, markers });
+  const known = new Set(catalog.map(row => row.id));
+  const foreign = scope.other.length ? await query('/marker/get/list_byinfo', body(scope.other)) : [];
+  const other = new Set();
+  for (const row of foreign) {
+    const id = markerId(row?.id);
+    if (known.has(id)) fail('catalog-map-conflict');
+    other.add(id);
+  }
+  // marked_layers spans all maps. A missing ID cannot safely be assigned to
+  // Teyvat; exclude and report it instead of manufacturing map metadata.
+  const foundIds = saved.ids.filter(id => known.has(id));
+  const otherMaps = saved.ids.filter(id => other.has(id)).length;
+  const unknown = saved.ids.length - foundIds.length - otherMaps;
+  const result = await buildSourceTransfer({ provider: 'kongying', map: 'kongying:v3:teyvat', generation: GENERATION, catalog, foundIds });
+  assertCurrent();
+  return { ...result, summary: { ...result.summary, unknown, otherMaps, timed: saved.timed }, assertCurrent };
+}
+const ERRORS = Object.freeze({
+  'wrong-site': 'Open https://v3.yuanshen.site/ and run this script there.',
+  'site-version-changed': 'Kongying has changed. Use an updated overlay source script.',
+  'site-not-ready': 'Wait for the Kongying map and browser-local save to finish loading, then retry.',
+  'visitor-required': 'Kongying visitor access is not ready. Reload the map normally, wait for it to load, then retry.',
+  'local-progress-unavailable': 'The browser did not allow reading Kongying local progress. No file was exported.',
+  'invalid-progress': 'Kongying browser-local progress has an unexpected format. No file was exported.',
+  'context-changed': 'The Kongying page, visitor session or local save changed during export. Run the script again.',
+  'catalog-read-failed': 'Could not read the Kongying public catalog in this visitor session. Reload the map and retry.',
+  'catalog-unavailable': 'Kongying returned an incomplete or unexpected catalog format. No file was exported.',
+  'catalog-too-large': 'The Kongying catalog exceeds the safe transfer size. Use an updated overlay source script.',
+  'catalog-map-conflict': 'Kongying returned conflicting marker map identities. No file was exported.',
+});
+async function runSourceExport({ window, fetch, download, console }) {
+  try {
+    const result = await exportKongying(window, fetch);
+    const bytes = serializeTransfer(result.envelope);
+    result.assertCurrent();
+    await download('genshin-kongying-progress.json', bytes);
+    const { found, timed, otherMaps, unknown } = result.summary;
+    console.log('Kongying export: download requested for ' + found + ' permanent found Teyvat markers. ' + timed + ' timed respawn entries, ' + otherMaps + ' found markers on other maps and ' + unknown + ' unknown marker IDs were excluded.');
+    console.log('This file contains the currently loaded browser-local save. To export a Gitee save, first load that save normally in Kongying. In the overlay, open Profiles & transfers, select Kongying and choose genshin-kongying-progress.json.');
+    return true;
+  } catch (error) {
+    console.error('Kongying export stopped: ' + (ERRORS[error?.code] || 'No file was exported. Reload the map and use an updated overlay source script.'));
+    return false;
+  }
+}
+module.exports = { runSourceExport, exportKongying };
+
+},
+7:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS } = require(0);
+const MAP = 'kongying:v3:teyvat';
+const fail = () => { throw Object.assign(new Error('catalog-unavailable'), { code: 'catalog-unavailable' }); };
+function markerId(value) {
+  if (!Number.isSafeInteger(value) || value <= 0) fail();
+  return String(value);
+}
+function list(value, limit = TRANSFER_LIMITS.RECORDS) {
+  if (!Array.isArray(value) || value.length > limit || Object.keys(value).length !== value.length) fail();
+  return value;
+}
+
+/** Resolve the same tile inheritance as create_map_config, but fail if an
+ * unknown area would silently fall back to the default map in the website. */
+function catalogScope(config, areas) {
+  const tiles = config?.tiles;
+  if (!tiles || typeof tiles !== 'object' || Array.isArray(tiles) || typeof tiles['提瓦特-base0']?.code !== 'string') fail();
+  const base = tiles['提瓦特-base0'].code;
+  const resolve = (key, visited = new Set()) => {
+    if (typeof key !== 'string' || !Object.hasOwn(tiles, key) || visited.has(key)) fail();
+    visited.add(key);
+    const value = tiles[key];
+    if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
+    if (value.code !== undefined) { if (typeof value.code !== 'string' || !value.code) fail(); return value.code; }
+    return resolve(value.extend, visited);
+  };
+  const teyvat = [], other = [], ids = new Set();
+  for (const area of list(areas, 4096)) {
+    const id = markerId(area?.id);
+    if (ids.has(id) || typeof area.isFinal !== 'boolean') fail();
+    ids.add(id);
+    if (area.isFinal) (resolve(area.code) === base ? teyvat : other).push(area.id);
+  }
+  if (!teyvat.length) fail();
+  return { teyvat: teyvat.sort((a, b) => a - b), other: other.sort((a, b) => a - b) };
+}
+
+/** Native contract: exact public config + full area list + the explicit
+ * Teyvat areaIdList used for the flat list_byinfo response. Marker rows have
+ * no areaId, so coordinates must never establish their map implicitly. */
+function normalizeCatalog(native) {
+  const scope = catalogScope(native?.config, native?.areas);
+  const requested = list(native?.areaIds, 4096).map(markerId).sort();
+  if (JSON.stringify(requested) !== JSON.stringify(scope.teyvat.map(String).sort())) fail();
+  const byId = new Map();
+  for (const row of list(native?.markers)) {
+    const id = markerId(row?.id);
+    if (typeof row.position !== 'string' || row.position.length > 128) fail();
+    const parts = row.position.split(',');
+    const decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+    if (parts.length !== 2 || parts.some(value => !decimal.test(value.trim()))) fail();
+    const [lat, lng] = parts.map(Number);
+    if (![lat, lng].every(value => Number.isFinite(value) && Math.abs(value) <= TRANSFER_LIMITS.COORDINATE)) fail();
+    const itemIds = [...new Set(list(row.itemList, 32).map(item => markerId(item?.itemId)))];
+    if (!itemIds.length) fail();
+    const category = itemIds.sort().join('+');
+    if (category.length > TRANSFER_LIMITS.ID) fail();
+    const record = { id, map: MAP, category, level: null, state: true,
+      position: { x: lng || 0, y: lat || 0, space: 'kongying:leaflet-lng-lat' } };
+    if (byId.has(id) && JSON.stringify(byId.get(id)) !== JSON.stringify(record)) fail();
+    byId.set(id, record);
+  }
+  if (!byId.size) fail();
+  return [...byId.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+}
+module.exports = { normalizeCatalog, catalogScope, markerId };
+
 }
 };
 const cache=Object.create(null);

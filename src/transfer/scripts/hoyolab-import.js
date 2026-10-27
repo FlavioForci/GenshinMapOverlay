@@ -161,7 +161,7 @@ const routes = (method, origin, paths) => paths.map(path => endpoint(method, ori
 const POLICY = {
   appsample: {
     origins: ['https://genshin-impact-map.appsample.com'], maps: ['appsample:gim:2'],
-    tiers: ['unverified', 'website-account'], statePaths: [],
+    tiers: ['unverified', 'website-account'], statePaths: ['site.modules.9302.Z.get(users,uid).markerIds', 'site.modules.3580.gz', 'window._store.getState().user.user.uid', 'localStorage.gim-local-markers.markerIds'],
     endpoints: [
       ...routes('GET', 'https://game-data.lemonapi.com', ['/gim/markers_all.v5.compressed.json']),
       ...routes('GET', 'https://genshin-impact-map.appsample.com', ['/api/markerNames.json']),
@@ -683,7 +683,149 @@ module.exports = { createTransferUi };
 
 },
 4:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS, validateTransfer, attachmentSchema: schema } = require(0);
+
+/** Shared source-file contract. Catalog hashes match the main-process research
+ * tool so reviewed mapping assets and independent browser reads share identity.
+ * Only explicit found IDs become records; missing IDs never mean not-found.
+ */
+async function buildSourceTransfer({ provider, map, generation, catalog, foundIds }) {
+  const base = { format: 'genshin-map-overlay.transfer', version: 1,
+    producer: { name: 'Genshin Map Overlay source', version: '0.1.0' }, exportedAt: new Date().toISOString(),
+    provider, adapterVersion: '0.1.0', map, catalog: { generation, fingerprint: 'pending' },
+    coverage: { categories: [], levels: [], complete: false }, records: catalog };
+  const checked = validateTransfer(base);
+  const metadata = checked.records.map(row => JSON.stringify([row.id, row.map, row.category, row.level,
+    row.position === null ? null : [row.position.x, row.position.y, row.position.space]])).sort().map(row => JSON.parse(row));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([provider, map, metadata])));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  schema.array(foundIds, TRANSFER_LIMITS.RECORDS);
+  const ids = [...new Set(foundIds.map(id => schema.text(id, TRANSFER_LIMITS.ID)))].sort();
+  const byId = new Map(checked.records.map(row => [row.id, row])); let unknown = 0;
+  const records = ids.map(id => {
+    const row = byId.get(id);
+    if (row) return { ...row, state: true };
+    unknown++;
+    return { id, map, category: null, level: null, state: true, position: null };
+  });
+  const categories = [...new Set(records.map(row => row.category).filter(value => value !== null))].sort();
+  const envelope = validateTransfer({ ...base, catalog: { generation, fingerprint }, records,
+    coverage: { categories: categories.length <= TRANSFER_LIMITS.COVERAGE ? categories : [], levels: [], complete: false } });
+  return { envelope, summary: { found: records.length, unknown } };
+}
+
+module.exports = { buildSourceTransfer };
+
+},
+5:function(require,module,exports){
 module.exports={"provider":"hoyolab","adapterVersion":"0.1.0","status":"planned","variants":[{"id":"international-web","origins":["https://act.hoyolab.com"],"map":"hoyolab:ys_obc:2","generation":"bundle_cecaae550a4003092d80:1_6be3a4156dff00602a2f","accountTier":"unverified","browser":{"family":"chromium","version":""},"catalogFingerprint":"d4dab38636800d2fa6115887309bd0d8f13dc1ef3b23066135c205ad68ce9e2c","read":"unverified","write":"unverified","restore":"unverified","pacing":null,"endpoints":[{"method":"GET","origin":"https://sg-public-api-static.hoyolab.com","path":"/common/map_user/ys_obc/v3/map/point/list"},{"method":"GET","origin":"https://sg-public-api-static.hoyolab.com","path":"/common/map_user/ys_obc/v2/map/label/tree"},{"method":"GET","origin":"https://sg-public-api-static.hoyolab.com","path":"/common/map_user/ys_obc/v3/map/info"},{"method":"GET","origin":"https://sg-public-api-static.hoyolab.com","path":"/common/map_user/ys_obc/v2/map/point_group"},{"method":"GET","origin":"https://sg-public-api.hoyolab.com","path":"/common/map_user/ys_obc/v1/map/point/mark_map_point_list"},{"method":"POST","origin":"https://sg-public-api.hoyolab.com","path":"/common/map_user/ys_obc/v1/map/point/add_mark_map_point"},{"method":"POST","origin":"https://sg-public-api.hoyolab.com","path":"/common/map_user/ys_obc/v1/map/point/batch_mark_map_point"},{"method":"POST","origin":"https://sg-public-api.hoyolab.com","path":"/common/map_user/ys_obc/v1/map/point/new_del_mark_map_point"}],"statePaths":["state.markPointList"],"evidence":{"checkedAt":"2026-10-24","read":false,"write":false,"reload":false,"destinationOnlyPreserved":false,"pairAccepted":false,"restore":false},"reasonCode":"disposable-account-acceptance-pending"}],"reasonCode":"disposable-account-acceptance-pending"};
+},
+6:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS } = require(0);
+const { buildSourceTransfer } = require(4);
+const { normalizeCatalog, normalizeProgress } = require(7);
+const BUNDLE = '/ys/app/interactive-map/bundle_cecaae550a4003092d80.js';
+const PROGRESS = 'https://sg-public-api.hoyolab.com/common/map_user/ys_obc/v1/map/point/mark_map_point_list?map_id=2&app_sn=ys_obc&lang=en-us';
+const CATALOG = 'https://sg-public-api-static.hoyolab.com/common/map_user/ys_obc/v3/map/point/list?map_id=2&app_sn=ys_obc&lang=en-us';
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+function context(window) {
+  if (window.location?.origin !== 'https://act.hoyolab.com' || !window.location.pathname.startsWith('/ys/app/interactive-map/')) fail('wrong-site');
+  if (!Array.from(window.document.scripts).some(s => { try { const u = new URL(s.src, window.location.origin); return u.origin === window.location.origin && u.pathname === BUNDLE; } catch { return false; } })) fail('site-version-changed');
+  const component = window.document.getElementById('root')?.__vue__;
+  const vm = component?.$root || component;
+  if (!vm?.$store || vm.$isSea !== true) fail('site-not-ready');
+  if (String(vm.$route?.params?.mapId) !== '2') fail('wrong-map');
+  const user = vm.$store.state.userInfo;
+  if (!user || user.loginStatus !== 1 || !user.uid) fail('sign-in-required');
+  return { vm, uid: String(user.uid) };
+}
+async function readJson(fetch, url, credentials) {
+  let response, text;
+  try {
+    response = await fetch(url, { method: 'GET', credentials, redirect: 'error', signal: AbortSignal.timeout(30000), headers: { Accept: 'application/json' } });
+    if (!response.ok) fail('source-read-failed');
+    text = await response.text();
+  } catch { fail('source-read-failed'); }
+  if (new TextEncoder().encode(text).byteLength > TRANSFER_LIMITS.BYTES) fail('source-too-large');
+  let result; try { result = JSON.parse(text); } catch { fail('invalid-response'); }
+  if (result?.retcode !== 0 || !result.data || typeof result.data !== 'object') fail('source-read-failed');
+  return result.data;
+}
+async function exportHoYoLab({ window, fetch }) {
+  const captured = context(window);
+  function assertCurrent() {
+    let current; try { current = context(window); } catch { fail('context-changed'); }
+    if (current.vm !== captured.vm || current.uid !== captured.uid) fail('context-changed');
+  }
+  const progress = await readJson(fetch, PROGRESS, 'include'); assertCurrent();
+  if (progress.has_more === true || (Number.isFinite(progress.total) && progress.total > progress.list?.length)) fail('incomplete-progress');
+  const foundIds = normalizeProgress(progress.list);
+  const native = await readJson(fetch, CATALOG, 'omit'); assertCurrent();
+  const catalog = normalizeCatalog(native.point_list);
+  const result = await buildSourceTransfer({ provider: 'hoyolab', map: 'hoyolab:ys_obc:2', generation: 'bundle:cecaae550a4003092d80:map2', catalog, foundIds });
+  assertCurrent(); return { ...result, assertCurrent };
+}
+const MESSAGES = {
+  'wrong-site': 'Open the international HoYoLAB Teyvat Interactive Map and run this script there.',
+  'site-version-changed': 'HoYoLAB changed its map deployment. Use an updated source script.',
+  'site-not-ready': 'Wait for the international HoYoLAB map to finish loading.',
+  'wrong-map': 'Select Teyvat (map 2) before exporting.',
+  'sign-in-required': 'Sign in to HoYoLAB, wait for your saved marks to load, then retry.',
+  'source-read-failed': 'The saved marks could not be read. Check your sign-in and connection; no local fallback was used.',
+  'source-too-large': 'The source response exceeds the supported size.',
+  'invalid-response': 'HoYoLAB returned an unexpected response format.',
+  'invalid-progress': 'HoYoLAB returned an unexpected marker list.',
+  'catalog-unavailable': 'The Teyvat marker catalog is unavailable.',
+  'incomplete-progress': 'HoYoLAB returned an incomplete progress list. No partial file was exported.',
+  'context-changed': 'The account or map changed during export. Run the script again.',
+};
+async function runSourceExport({ window, fetch, download, console }) {
+  try {
+    const result = await exportHoYoLab({ window, fetch });
+    const { serializeTransfer } = require(0);
+    const bytes = serializeTransfer(result.envelope); result.assertCurrent();
+    await download('genshin-hoyolab-progress.json', bytes);
+    console.log('HoYoLAB export: download requested for ' + result.summary.found + ' found Teyvat marks; ' + result.summary.unknown + ' catalog-unknown IDs retained for recovery.');
+    console.log('In the overlay select HoYoLAB, choose genshin-hoyolab-progress.json, review matched/unmatched counts and apply to a new profile.');
+  } catch (error) {
+    const code = Object.hasOwn(MESSAGES, error?.code) ? error.code : 'source-export-failed';
+    console.error('HoYoLAB export stopped (' + code + '): ' + (MESSAGES[code] || 'The file could not be exported. Reload the map and retry.'));
+  }
+}
+module.exports = { exportHoYoLab, runSourceExport };
+
+},
+7:function(require,module,exports){
+'use strict';
+const { TRANSFER_LIMITS } = require(0);
+const fail = code => { throw Object.assign(new Error(code), { code }); };
+const MAP = 'hoyolab:ys_obc:2';
+function id(value) {
+  const text = typeof value === 'number' ? String(value) : value;
+  if (typeof text !== 'string' || !/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text))) fail('invalid-progress');
+  return text;
+}
+function array(rows) {
+  if (!Array.isArray(rows) || rows.length > TRANSFER_LIMITS.RECORDS || rows.some((_, i) => !Object.hasOwn(rows, i)) || Object.keys(rows).length !== rows.length) fail('invalid-progress');
+}
+function normalizeCatalog(rows) {
+  array(rows); if (!rows.length) fail('catalog-unavailable'); const seen = new Set();
+  return rows.map(row => {
+    const key = id(row?.id), category = id(row?.label_id);
+    if (seen.has(key) || !Number.isFinite(row.x_pos) || !Number.isFinite(row.y_pos)
+      || Math.abs(row.x_pos) > TRANSFER_LIMITS.COORDINATE || Math.abs(row.y_pos) > TRANSFER_LIMITS.COORDINATE) fail('invalid-progress');
+    seen.add(key);
+    return { id: key, map: MAP, category, level: row.z_level === 0 && row.point_group === null ? null : 'hoyolab:unreviewed-layer', state: true, position: { x: row.x_pos || 0, y: row.y_pos || 0, space: 'hoyolab:x_pos-y_pos' } };
+  });
+}
+function normalizeProgress(rows) {
+  array(rows);
+  return [...new Set(rows.map(row => id(row?.point_id)))];
+}
+module.exports = { normalizeCatalog, normalizeProgress };
+
 }
 };
 const cache=Object.create(null);

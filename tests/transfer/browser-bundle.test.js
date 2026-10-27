@@ -9,16 +9,18 @@ const { buildTransferScripts } = require('../../tools/build-transfer-scripts');
 const { createTransferUi } = require('../../src/transfer/browser/ui');
 const { makeDocument } = require('./helpers');
 
-test('ten deterministic self-contained scripts fail closed with concrete reasons and no remote calls', async () => {
+test('ten deterministic bundles reject unsupported site contexts without remote calls', async () => {
   const root = path.resolve(__dirname, '../..'); const paths = await buildTransferScripts({ root });
   assert.equal(paths.length, 10); const first = await Promise.all(paths.map(p => fs.readFile(p, 'utf8')));
   await buildTransferScripts({ root }); assert.deepEqual(await Promise.all(paths.map(p => fs.readFile(p, 'utf8'))), first);
-  for (const code of first) {
+  for (const [index, code] of first.entries()) {
     const errors = []; let remote = 0;
-    const context = { console: { error: x => errors.push(x) }, fetch: () => remote++, document: { createElement: () => { throw new Error('must stop before file/UI'); } } };
+    const context = { window: { location: { origin: 'https://example.invalid' } }, console: { error: x => errors.push(x) }, fetch: () => remote++, document: { createElement: () => { throw new Error('must stop before file/UI'); } } };
     await vm.runInNewContext(code, context, { timeout: 1000 });
-    assert.equal(remote, 0); assert.equal(errors.length, 1); assert.match(errors[0], /acceptance|verification|interface|catalog/);
-    assert.match(errors[0], /unavailable|pending/);
+    assert.equal(remote, 0); assert.equal(errors.length, 1);
+    if (['appsample', 'hoyolab', 'kongying', 'bwiki'].some(id => paths[index].endsWith('/' + id + '-export.js'))) assert.match(errors[0], /wrong-site|Open .*map|Open https/);
+    else { assert.match(errors[0], /acceptance|verification|interface|catalog/); assert.match(errors[0], /unavailable|pending/); }
+    if (paths[index].endsWith('/mapgenie-export.js')) assert.match(errors[0], /access was blocked.*No file was exported/);
   }
 });
 

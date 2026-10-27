@@ -1,5 +1,5 @@
 'use strict';
-const { validateTransfer, getTransferDuplicateCount } = require('./envelope');
+const { validateTransfer, getTransferDuplicateCount, TRANSFER_LIMITS } = require('./envelope');
 const { validateAttachments } = require('./attachments');
 const { matchRecords, reverseIds } = require('./mapping');
 const NAMESPACE = 'appsample:gim:2';
@@ -83,7 +83,7 @@ function planExport(profile, attachment, { provider, map, catalog, pack, metadat
   const sourceById = new Map(compatiblePack?.sourceMarkers.map(row => [row.id, row]) || []);
   const reverseRecords = reverse.map(id => {
     const source = sourceById.get(id);
-    return { id, map, category: source?.category ?? null, level: source?.level ?? null, state: true, position: source ? { x: source.x, y: source.y, space: compatiblePack.sourceCoordinateSpace } : null };
+    return { id, map, category: source?.category ?? null, level: source?.level ?? null, state: true, position: source ? { x: source.x, y: source.y, space: source.space || compatiblePack.sourceCoordinateSpace } : null };
   });
   const targetById = new Map(catalog.markers.map(row => [row.id, row]));
   if (exact) for (const id of found) if (targetById.has(id)) {
@@ -113,7 +113,8 @@ function planExport(profile, attachment, { provider, map, catalog, pack, metadat
     return { ...match, sourceId: id };
   });
   const envelope = validateTransfer(envelopeFor(provider, map, outputCatalog, [...records.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0), metadata));
-  envelope.coverage = { categories: [...new Set(envelope.records.map(r => r.category).filter(v => v !== null))].sort(), levels: [...new Set(envelope.records.map(r => r.level).filter(v => v !== null))].sort(), complete: false };
+  const coverageValues = key => { const values = [...new Set(envelope.records.map(r => r[key]).filter(v => v !== null))].sort(); return values.length <= TRANSFER_LIMITS.COVERAGE ? values : []; };
+  envelope.coverage = { categories: coverageValues('category'), levels: coverageValues('level'), complete: false };
   return { envelope: validateTransfer(envelope), report: { format: 'genshin-map-overlay.transfer-report', version: 1, provider, map, counts: totals, coverage: envelope.coverage, decisions } };
 }
 module.exports = { planImport, planExport };

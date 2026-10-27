@@ -1,5 +1,7 @@
 # Map transfer capabilities and acceptance gates
 
+**2026-10-27 update:** AppSample source export is now implemented. See the [current source-reader evidence](2026-10-27-appsample-source.md). The historical investigation below describes the earlier blocked implementation; destination writes and full provider-pair acceptance remain pending.
+
 Research began 2026-10-24; offline registry and measurements recorded **2026-10-25**, Europe/Warsaw. This record reuses the dated public-source investigation and mapping investigation. It adds no authenticated requests, private account reads, browser storage reads, transfer writes, or restriction bypasses. No provider is supported. The five original provider families remain targets in the prescribed delivery order.
 
 ## Registry and exact scope

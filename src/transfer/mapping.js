@@ -4,13 +4,13 @@ const { validateTransfer, TRANSFER_LIMITS, attachmentSchema: s } = require('./en
 const { createSpatialIndex, fitAffine } = require('./spatial-index');
 const NAMESPACE = 'appsample:gim:2';
 /** @typedef {{source:[number,number],target:[number,number],sourceId:string,canonicalId:string}} CalibrationPoint */
-/** @typedef {{version:1,provider:import('./capabilities').ProviderId,map:string,sourceCatalogFingerprint:string,canonicalCatalogFingerprint:string,sourceCoordinateSpace:string,sourceMarkers:import('./catalog').CatalogPoint[],categoryPairs:Array<{source:string,target:string,permanent:boolean}>,levelPairs:Array<{source:string,target:string}>,pairs:Array<{sourceId:string,canonicalId:string}>,spatial:null|{coefficients:[number,number,number,number,number,number],radius:number,minMargin:number,maxResidual:number,anchors:CalibrationPoint[],heldOut:CalibrationPoint[]}}} MappingPack */
+/** @typedef {{version:1,provider:import('./capabilities').ProviderId,map:string,sourceCatalogFingerprint:string,canonicalCatalogFingerprint:string,sourceCoordinateSpace:string,recordScoped?:true,sourceMarkers:import('./catalog').CatalogPoint[],categoryPairs:Array<{source:string,target:string,permanent:boolean}>,levelPairs:Array<{source:string,target:string}>,pairs:Array<{sourceId:string,canonicalId:string}>,spatial:null|{coefficients:[number,number,number,number,number,number],radius:number,minMargin:number,maxResidual:number,anchors:CalibrationPoint[],heldOut:CalibrationPoint[]}}} MappingPack */
 /** @typedef {{sourceId:string,status:'matched'|'ambiguous'|'unsupported'|'unknown',canonicalId:string|null,confidence:'exact'|'reviewed'|'spatial'|null,mappingVersion:string|null,reason:string}} MappingDecision */
 const name = value => s.text(value, TRANSFER_LIMITS.ID);
 function coordinate(value) { s.check(Number.isFinite(value) && Math.abs(value) <= TRANSFER_LIMITS.COORDINATE); return value || 0; }
-function point(value) {
-  s.object(value, ['id', 'category', 'level', 'x', 'y']);
-  return { id: name(value.id), category: name(value.category), level: value.level === null ? null : name(value.level), x: coordinate(value.x), y: coordinate(value.y) };
+function point(value, recordScoped = false) {
+  s.object(value, ['id', 'category', 'level', 'x', 'y'], recordScoped ? ['space'] : []);
+  return { id: name(value.id), category: name(value.category), level: value.level === null ? null : name(value.level), x: coordinate(value.x), y: coordinate(value.y), ...(recordScoped && Object.hasOwn(value, 'space') ? { space: name(value.space) } : {}) };
 }
 function unique(rows, key) { const set = new Set(); for (const row of rows) { const value = key(row); s.check(!set.has(value)); set.add(value); } }
 function list(value, normalize) { return s.array(value, TRANSFER_LIMITS.RECORDS).map(normalize); }
@@ -21,16 +21,23 @@ function calibration(value) { s.object(value, ['source', 'target', 'sourceId', '
  * @param {unknown} value @returns {MappingPack}
  */
 function validateMappingPack(value) {
-  s.object(value, ['version', 'provider', 'map', 'sourceCatalogFingerprint', 'canonicalCatalogFingerprint', 'sourceCoordinateSpace', 'sourceMarkers', 'categoryPairs', 'levelPairs', 'pairs', 'spatial']);
+  s.object(value, ['version', 'provider', 'map', 'sourceCatalogFingerprint', 'canonicalCatalogFingerprint', 'sourceCoordinateSpace', 'sourceMarkers', 'categoryPairs', 'levelPairs', 'pairs', 'spatial'], ['recordScoped']);
+  const recordScoped = Object.hasOwn(value, 'recordScoped');
+  if (recordScoped) s.check(value.recordScoped === true && value.spatial === null);
   s.check(value.version === 1);
-  const result = { version: 1, provider: s.provider(value.provider), map: name(value.map), sourceCatalogFingerprint: s.text(value.sourceCatalogFingerprint), canonicalCatalogFingerprint: s.text(value.canonicalCatalogFingerprint), sourceCoordinateSpace: name(value.sourceCoordinateSpace), sourceMarkers: list(value.sourceMarkers, point), categoryPairs: [], levelPairs: [], pairs: list(value.pairs, correspondence), spatial: null };
+  const result = { version: 1, provider: s.provider(value.provider), map: name(value.map), sourceCatalogFingerprint: s.text(value.sourceCatalogFingerprint), canonicalCatalogFingerprint: s.text(value.canonicalCatalogFingerprint), sourceCoordinateSpace: name(value.sourceCoordinateSpace), sourceMarkers: list(value.sourceMarkers, row => point(row, recordScoped)), categoryPairs: [], levelPairs: [], pairs: list(value.pairs, correspondence), spatial: null };
+  if (recordScoped) result.recordScoped = true;
   unique(result.sourceMarkers, p => p.id); unique(result.pairs, p => p.sourceId); unique(result.pairs, p => p.canonicalId);
   const sourceIds = new Set(result.sourceMarkers.map(p => p.id));
   for (const pair of result.pairs) s.check(sourceIds.has(pair.sourceId));
   result.categoryPairs = list(value.categoryPairs, pair => { s.object(pair, ['source', 'target', 'permanent']); s.check(typeof pair.permanent === 'boolean'); return { source: name(pair.source), target: name(pair.target), permanent: pair.permanent }; });
   result.levelPairs = list(value.levelPairs, pair => { s.object(pair, ['source', 'target']); return { source: name(pair.source), target: name(pair.target) }; });
-  // Multiple spellings may name one verified floor, but category semantics must be bijective.
-  unique(result.categoryPairs, p => p.source); unique(result.categoryPairs, p => p.target); unique(result.levelPairs, p => p.source);
+  // Multiple spellings may name one verified floor. Spatial category semantics
+  // are bijective; explicit row-scoped pairs may combine reviewed regional labels.
+  unique(result.categoryPairs, p => p.source);
+  if (!recordScoped) unique(result.categoryPairs, p => p.target);
+  unique(result.levelPairs, p => p.source);
+  if (recordScoped) s.check(result.pairs.length > 0 && result.pairs.length === result.sourceMarkers.length);
   if (value.spatial !== null) {
     const v = value.spatial; s.object(v, ['coefficients', 'radius', 'minMargin', 'maxResidual', 'anchors', 'heldOut']);
     s.array(v.coefficients, 6); s.check(v.coefficients.length === 6 && v.coefficients.every(Number.isFinite));
@@ -46,7 +53,7 @@ function validateMappingPack(value) {
 }
 function checkedCatalog(value) {
   s.object(value, ['namespace', 'fingerprint', 'markers']); s.check(value.namespace === NAMESPACE);
-  const result = { namespace: NAMESPACE, fingerprint: s.text(value.fingerprint), markers: list(value.markers, point) };
+  const result = { namespace: NAMESPACE, fingerprint: s.text(value.fingerprint), markers: list(value.markers, row => point(row)) };
   for (const marker of result.markers) s.check(/^[1-9]\d*$/.test(marker.id) && Number.isSafeInteger(Number(marker.id)));
   unique(result.markers, p => p.id); return result;
 }
@@ -79,6 +86,15 @@ function mappingVersion(pack) {
   const stable = { ...pack, sourceMarkers: sorted(pack.sourceMarkers, 'id'), categoryPairs: sorted(pack.categoryPairs, 'source'), levelPairs: sorted(pack.levelPairs, 'source'), pairs: sorted(pack.pairs, 'sourceId'), spatial: pack.spatial && { ...pack.spatial, anchors: sorted(pack.spatial.anchors, 'sourceId'), heldOut: sorted(pack.spatial.heldOut, 'sourceId') } };
   return 'sha256:' + createHash('sha256').update(JSON.stringify(stable)).digest('hex');
 }
+function rowMappingVersion(pack, source, category, target, translatedLevel) {
+  // Authority for a fixed pair follows the pair's facts. Unrelated catalog
+  // additions, or removal of another stale pair during rebasing, must not
+  // invalidate a still-current imported observation's provenance.
+  const facts = ['reviewed-source-row-v1', pack.provider, pack.map,
+    { ...source, space: source.space || pack.sourceCoordinateSpace }, category,
+    translatedLevel ?? null, target];
+  return 'sha256:' + createHash('sha256').update(JSON.stringify(facts)).digest('hex');
+}
 // Compute all source decisions, including unimported markers, before projecting imported observations.
 function buildMatches(catalog, pack) {
   const byId = new Map(catalog.markers.map(p => [p.id, p]));
@@ -88,10 +104,11 @@ function buildMatches(catalog, pack) {
   const reserved = new Set(pack.pairs.map(p => p.canonicalId));
   const matches = new Map(), pending = [], unknownFloors = [];
   const spatialEnabled = modelWorks(pack, byId);
-  const version = mappingVersion(pack);
+  const version = pack.recordScoped ? null : mappingVersion(pack);
   for (const source of pack.sourceMarkers) {
     const category = categories.get(source.category);
-    const save = (status, reason, id = null, confidence = null) => matches.set(source.id, decision(source.id, status, reason, id, confidence, id === null ? null : version));
+    const save = (status, reason, id = null, confidence = null) => matches.set(source.id, decision(source.id, status, reason, id, confidence,
+      id === null ? null : pack.recordScoped ? rowMappingVersion(pack, source, category, byId.get(id), levels.get(source.level)) : version));
     if (!category || !category.permanent) { save('unsupported', 'category-not-permanent-or-reviewed'); continue; }
     const pairId = pairs.get(source.id);
     if (pairId !== undefined) {
@@ -142,7 +159,7 @@ function matchRecords(envelope, catalog, pack) {
   const input = validateTransfer(envelope), c = checkedCatalog(catalog);
   const p = pack === null ? null : validateMappingPack(pack);
   const exact = input.provider === 'appsample' && input.map === NAMESPACE;
-  const compatible = p && input.provider === p.provider && input.map === p.map && input.catalog.fingerprint === p.sourceCatalogFingerprint && c.fingerprint === p.canonicalCatalogFingerprint;
+  const compatible = p && input.provider === p.provider && input.map === p.map && (p.recordScoped || input.catalog.fingerprint === p.sourceCatalogFingerprint) && c.fingerprint === p.canonicalCatalogFingerprint;
   const byId = new Map(c.markers.map(row => [row.id, row]));
   const sources = new Map(p?.sourceMarkers.map(row => [row.id, row]) || []);
   const matches = compatible ? buildMatches(c, p) : new Map();
@@ -159,9 +176,12 @@ function matchRecords(envelope, catalog, pack) {
     if (!compatible) return reject('unknown', 'mapping-pack-unavailable-or-stale');
     const source = sources.get(record.id);
     if (!source) return reject('unknown', 'source-id-absent');
+    // A row-scoped pack tolerates unrelated catalog changes only when this
+    // imported row carries every trusted fact. Missing metadata never authorizes it.
+    if (p.recordScoped && (record.category !== source.category || record.level !== source.level || !record.position)) return reject('unknown', 'source-metadata-required');
     if (record.category !== null && record.category !== source.category) return reject('unsupported', 'source-category-mismatch');
     if (record.level !== null && source.level !== null && record.level !== source.level) return reject('unsupported', 'source-level-mismatch');
-    if (record.position && (record.position.space !== p.sourceCoordinateSpace || record.position.x !== source.x || record.position.y !== source.y)) return reject('unknown', 'source-coordinate-mismatch');
+    if (record.position && (record.position.space !== (source.space || p.sourceCoordinateSpace) || record.position.x !== source.x || record.position.y !== source.y)) return reject('unknown', 'source-coordinate-mismatch');
     return matches.get(record.id);
   });
 }
