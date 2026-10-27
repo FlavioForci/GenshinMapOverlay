@@ -854,7 +854,7 @@ function updateTrayMenu() {
           },
         },
         { type: 'separator' },
-        { label: tr('tray.openSettings'), click: () => shell.openPath(config.filePath()) },
+        { label: tr('tray.openSettings'), click: () => shell.openPath(config.ensureFile()) },
         { label: tr('tray.reloadSettings'), click: reloadSettings },
       ],
     },

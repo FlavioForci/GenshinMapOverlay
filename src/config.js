@@ -79,6 +79,19 @@ function load({ preserveMalformed = false } = {}) {
   }
 }
 
+// Create on explicit open, after migration has had a chance to preserve legacy
+// files. Exclusive creation keeps existing (including malformed) bytes intact.
+function ensureFile() {
+  const file = filePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  try {
+    fs.writeFileSync(file, '{}', { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  return file;
+}
+
 // Nur Abweichungen speichern, damit neue Standardwerte bei Updates greifen
 function save(cfg) {
   const out = {};
@@ -94,4 +107,4 @@ function save(cfg) {
   fs.writeFileSync(filePath(), JSON.stringify(out, null, 2), 'utf8');
 }
 
-module.exports = { load, save, filePath, DEFAULT_PROFILE_PREFERENCES };
+module.exports = { load, save, filePath, ensureFile, DEFAULT_PROFILE_PREFERENCES };
