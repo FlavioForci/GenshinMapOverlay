@@ -25,6 +25,27 @@ permissions:
   contents: write
 
 jobs:
+  # Some progress tests inject failures using Unix paths. Run the existing
+  # suites on Linux while the Windows installer builds in parallel.
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-fund
+
+      - name: Verify progress and transfers
+        run: |
+          npm run test:progress
+          npm run test:transfer
+          npm run build:transfer-scripts
+          git diff --exit-code -- src/transfer/scripts
+
   build:
     runs-on: windows-2022
     steps:
@@ -46,18 +67,6 @@ jobs:
             electron-v1-${{ runner.os }}-${{ runner.arch }}-
 
       - run: npm ci --no-fund
-
-      - name: Test progress
-        run: npm run test:progress
-
-      - name: Test transfers
-        run: npm run test:transfer
-
-      - name: Verify generated transfer scripts
-        run: |
-          npm run build:transfer-scripts
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git diff --exit-code -- src/transfer/scripts
 
       - name: Build installer
         run: npm run dist -- --x64 --publish never
@@ -81,11 +90,19 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-x64
+          path: dist
+
       - name: Attach installer to release
-        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
-        run: |
-          $installer = Get-ChildItem -Path dist -Filter 'GenshinMapOverlay-Setup-*.exe'
-          gh release upload "$env:RELEASE_TAG" $installer.FullName --clobber
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" dist/GenshinMapOverlay-Setup-*.exe --clobber
