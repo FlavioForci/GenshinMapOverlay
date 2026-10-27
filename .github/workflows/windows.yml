@@ -49,6 +49,10 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
+      # Generated transfer scripts must match the repository bytes exactly.
+      - name: Preserve repository line endings
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
