@@ -24,7 +24,17 @@ jobs:
           node-version: 22.12.0
           cache: npm
 
-      - run: npm ci
+      - name: Cache Electron downloads and packaging tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-v1-${{ runner.os }}-${{ runner.arch }}-
+
+      - run: npm ci --no-fund
 
       - name: Verify progress and transfers
         run: |

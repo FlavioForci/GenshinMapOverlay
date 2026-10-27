@@ -24,6 +24,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      # Keep Electron's and electron-builder's caches in a known location.
+      XDG_CACHE_HOME: ${{ github.workspace }}/.cache
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +35,17 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - name: Cache Electron downloads and packaging tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.XDG_CACHE_HOME }}/electron
+            ${{ env.XDG_CACHE_HOME }}/electron-builder
+          key: electron-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-v1-${{ runner.os }}-${{ runner.arch }}-
+
+      - run: npm ci --no-fund
 
       - name: App bauen
         run: npm run dist:linux
@@ -43,8 +56,10 @@ jobs:
       # Kein Test mit Genshin, Tray oder echter Bildschirmaufnahme
       - name: Starttest
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
+          if ! command -v Xvfb > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          fi
           APP="$PWD/dist/linux-unpacked/genshin-map-overlay"
           Xvfb :99 -screen 0 1920x1080x24 &
           export DISPLAY=:99
@@ -81,6 +96,7 @@ jobs:
             dist/*.AppImage
             dist/*.deb
           if-no-files-found: error
+          compression-level: 0
 
       - name: Ans Release hängen
         if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
