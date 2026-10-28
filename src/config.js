@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { writeAtomic } = require('./data/backup');
 
 const DEFAULTS = {
   hotkeys: {
@@ -14,6 +15,8 @@ const DEFAULTS = {
   },
   hotkeysEnabled: true,
   active: true,
+  // Beim Start fragen, mit welchem Profil (eigene Fundliste) gespielt wird
+  askProfile: true,
   // null = Setup bzw. Windows-Sprache
   language: null,
   // Oculi. Teleporter/Statuen nicht, die zeigt die Ingame-Karte schon
@@ -85,8 +88,7 @@ function save(cfg) {
       out[key] = value;
     }
   }
-  fs.mkdirSync(path.dirname(filePath()), { recursive: true });
-  fs.writeFileSync(filePath(), JSON.stringify(out, null, 2), 'utf8');
+  writeAtomic(filePath(), JSON.stringify(out, null, 2));
 }
 
 module.exports = { load, save, filePath };

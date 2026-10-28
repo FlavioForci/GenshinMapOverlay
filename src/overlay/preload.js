@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('overlayApi', {
   toggleFound: (id) => ipcRenderer.send('overlay:found-toggle', id),
   nearby: (id) => ipcRenderer.send('overlay:nearby', id),
   refreshData: () => ipcRenderer.send('overlay:refresh-data'),
+  profiles: () => ipcRenderer.send('overlay:profiles'),
   hide: () => ipcRenderer.send('overlay:hide'),
   icon: (type) => ipcRenderer.invoke('overlay:icon', type),
   comments: (type, id, page) => ipcRenderer.invoke('overlay:comments', type, id, page),

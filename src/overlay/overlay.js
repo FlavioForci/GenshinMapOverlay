@@ -909,6 +909,7 @@ function renderSettings() {
   $('size-value').textContent = `${settings.markerSize} px`;
   updateRangeFill($('opacity'));
   updateRangeFill($('size'));
+  $('profile-info').textContent = tt('ui.profile', { name: settings.profile || '' });
   const hk = settings.hotkeys || {};
   $('kbd-found').textContent = hk.toggleFound || '';
   const keys = [
@@ -933,6 +934,7 @@ function renderDataInfo() {
 // ---------- Bedienelemente ----------
 
 $('close-panel').addEventListener('click', () => setPanel(false));
+$('switch-profile').addEventListener('click', () => api.profiles());
 $('panel-handle').addEventListener('click', () => setPanel(true));
 $('close-spot').addEventListener('click', closeSpot);
 $('lightbox').addEventListener('click', closeLightbox);

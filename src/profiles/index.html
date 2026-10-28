@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'">
+  <title>Genshin Map Overlay</title>
+  <link rel="stylesheet" href="profiles.css">
+</head>
+<body>
+  <!-- data-i18n*: Texte kommen zur Laufzeit (shared/i18n.js) -->
+  <main id="card" class="card">
+    <header class="head">
+      <div class="title">
+        <img src="../../assets/icon.png" alt="" width="22" height="22">
+        <span data-i18n="profile.title"></span>
+      </div>
+      <button id="close" class="close-btn" type="button" data-i18n-title="profile.close" data-i18n-aria="profile.close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.1 6.3 13.4 12l5.7 5.7-1.4 1.4-5.7-5.7-5.7 5.7-1.4-1.4 5.7-5.7-5.7-5.7 1.4-1.4 5.7 5.7 5.7-5.7z"/></svg>
+      </button>
+    </header>
+
+    <p class="hint" data-i18n="profile.hint"></p>
+    <ul id="list" class="list"></ul>
+    <button id="add" class="add-btn" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+      <span data-i18n="profile.add"></span>
+    </button>
+
+    <footer class="foot">
+      <label class="check"><input id="ask" type="checkbox"><span data-i18n="profile.ask"></span></label>
+      <button id="go" class="primary" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>
+        <span data-i18n="profile.go"></span>
+      </button>
+    </footer>
+  </main>
+
+  <script src="../shared/i18n.js"></script>
+  <script src="profiles.js"></script>
+</body>
+</html>

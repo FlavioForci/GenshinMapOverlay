@@ -69,6 +69,17 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 
 Gefundene Marker werden nur auf deinem PC gespeichert (`%APPDATA%\Genshin Map Overlay\found.json`).
 
+### Profile und Sicherungen
+
+- Beim Start fragt das Overlay, mit welchem Profil du spielst. Jedes Profil hat eine eigene Liste
+  gefundener Marker, z. B. für einen zweiten Account. Deine bisherige Liste ist **Profil 1**.
+- In dem Fenster kannst du Profile hinzufügen, umbenennen und löschen. Wechseln geht später im Panel
+  (**Wechseln**) oder im Tray-Menü (**Profil**). Wer nur eins braucht, nimmt den Haken bei
+  **Beim Start fragen** raus.
+- Vor der ersten Änderung nach jedem Start sichert das Overlay die Liste (die letzten 20 je Profil).
+  Ist die Datei beschädigt, lädt es selbst die neueste Sicherung. Gelöschte Profile landen auch dort.
+  Tray-Menü → **Erweitert** → **Sicherungsordner öffnen**.
+
 ### Minimap
 
 - Nach dem Start des Overlays oder nach einem Teleport einmal mit **M** die Karte öffnen und wieder
@@ -119,6 +130,7 @@ Tray-Menü → **Erweitert** → **Einstellungsdatei öffnen**, danach **Einstel
 | `showInCaptures` | `true` = Overlay ist in Screenshots, Aufnahmen und Streams zu sehen (auch im Panel) |
 | `minimap` | `false` = keine Marker auf der Minimap (auch im Panel und im Tray-Menü) |
 | `nearbyRadius` | Wie nah ein Marker für den Alt+E-Hinweis sein muss, in Kartenpixeln (Standard 7) |
+| `askProfile` | `false` = beim Start nicht nach dem Profil fragen (auch im Profil-Fenster) |
 | `genshinPath` | Pfad zur `GenshinImpact.exe`, falls sie nicht automatisch gefunden wird |
 
 ## Datenschutz

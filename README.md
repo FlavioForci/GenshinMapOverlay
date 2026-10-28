@@ -16,6 +16,7 @@ Deutsche Anleitung: [README.de.md](README.de.md)
 - Markers on the minimap too, while you explore. Walk up to one and press **Alt+E** to mark it as found.
 - Click a marker for the community's top-voted photo of the spot, plus a video where there is one.
 - Right-click marks a marker as found. Hide found ones with one key and see your progress per type.
+- Profiles: a separate list of found markers for each account, with automatic backups.
 - 690+ marker types in categories, with search.
 - Hotkeys that work in game, English and German, scales with your resolution up to 4K.
 
@@ -77,6 +78,16 @@ version yet, so please report anything odd on [Discord](https://discord.gg/TaKd4
 
 Found markers are saved only on your PC (`%APPDATA%\Genshin Map Overlay\found.json`).
 
+### Profiles and backups
+
+- On start the overlay asks which profile you play with. Each profile has its own list of found
+  markers, e.g. for a second account. Your existing list is **Profile 1**.
+- In that window you can add, rename and delete profiles. Switch later in the panel (**Switch**) or
+  in the tray menu (**Profile**). Untick **Ask on start** if you only need one.
+- Before the first change after each start the overlay backs up the list (the last 20 per profile).
+  If the file gets damaged, it loads the newest backup by itself. Deleted profiles also end up there.
+  Tray menu → **Advanced** → **Open backups folder**.
+
 ### Minimap
 
 - After starting the overlay or after a teleport, open the map once with **M** and close it again.
@@ -126,6 +137,7 @@ Tray menu → **Advanced** → **Open settings file**, then **Reload settings**.
 | `showInCaptures` | `true` = overlay shows up in screenshots, recordings and streams (also in the panel) |
 | `minimap` | `false` = no markers on the minimap (also in the panel and tray menu) |
 | `nearbyRadius` | How close a marker must be for the Alt+E prompt, in map pixels (default 7) |
+| `askProfile` | `false` = don't ask for the profile on start (also in the profile window) |
 | `genshinPath` | Path to `GenshinImpact.exe` if it isn't found automatically |
 
 ## Privacy

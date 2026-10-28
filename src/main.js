@@ -10,6 +10,8 @@ const config = require('./config');
 const I18n = require('./shared/i18n');
 const { DataStore } = require('./data/store');
 const { FoundStore } = require('./data/found');
+const { ProfileStore } = require('./data/profiles');
+const backup = require('./data/backup');
 const TILESET = require('./data/tileset');
 const hotkeyHelper = require('./hotkey-helper');
 
@@ -21,10 +23,12 @@ const IS_MAC = process.platform === 'darwin';
 let cfg;
 let lang = 'en';
 let store;
+let profiles;
 let found;
 let markerData = null;
 let overlayWin;
 let trackerWin;
+let profileWin = null;
 let tray;
 let quitting = false;
 let saveTimer;
@@ -94,7 +98,7 @@ if (hotkeyHelper.isHelperProcess()) {
 app.on('before-quit', () => {
   quitting = true;
   timers.forEach((timer) => clearInterval(timer));
-  if (found) found.saveNow();
+  if (found) found.flush();
 });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => {});
@@ -118,7 +122,8 @@ async function start() {
   lang = resolveLanguage();
   if (cfg.tileset) Object.assign(TILESET, cfg.tileset);
   store = new DataStore(path.join(app.getPath('userData'), 'cache'), TILESET, cfg.serverUrl);
-  found = new FoundStore(path.join(app.getPath('userData'), 'found.json'));
+  profiles = new ProfileStore(app.getPath('userData'));
+  openFound();
   state.isAdmin = isAdmin();
   log(`start: Version ${app.getVersion()}, Electron ${process.versions.electron}, Sprache ${lang}, Admin ${state.isAdmin}, Bildschirme ${screen.getAllDisplays().map((d) => `${d.id}:${d.size.width}x${d.size.height}@${d.scaleFactor}`).join(' ')}`);
 
@@ -128,6 +133,7 @@ async function start() {
   createTray();
   registerHotkeys();
   checkScreenPermission();
+  if (cfg.askProfile) showProfiles();
 
   for (const event of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(event, () => {
@@ -247,6 +253,8 @@ function keepOnTop() {
   if (!alive(overlayWin) || !overlayWin.isVisible()) return;
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   overlayWin.setContentProtection(!cfg.showInCaptures);
+  // Profil-Abfrage bleibt über dem Overlay
+  if (alive(profileWin) && profileWin.isVisible()) profileWin.moveTop();
 }
 
 // Genshin (Admin) vorne → forward-Mausereignisse fehlen, Cursor daher selbst abfragen.
@@ -326,6 +334,7 @@ function publicSettings() {
     opacity: cfg.opacity,
     markerSize: cfg.markerSize,
     active: cfg.active,
+    profile: profileName(profiles.active),
   };
 }
 
@@ -421,6 +430,7 @@ function setLanguage(code) {
   lang = I18n.resolve(code);
   updateSettings({ language: lang });
   sendToOverlay('tracker:status', localizedStatus());
+  sendProfiles();
   loadMarkerData(false);
   notify(tr('notice.languageChanged'));
 }
@@ -508,6 +518,147 @@ function reloadSettings() {
     loadMarkerData(false);
   }
   notify(tr('notice.settingsReloaded'));
+}
+
+// ---------- Profile ----------
+
+const PROFILE_WIDTH = 420;
+
+function backupDir() {
+  return path.join(app.getPath('userData'), 'backups');
+}
+
+function profileName(id) {
+  const profile = profiles.get(id);
+  return (profile && profile.name) || tr('profile.default', { n: id });
+}
+
+// Fundliste des aktiven Profils; kaputte Datei → neueste Sicherung, mit Hinweis
+function openFound() {
+  found = new FoundStore(profiles.foundFile(profiles.active), {
+    backupDir: backupDir(),
+    onError: (err) => {
+      log(`found: Speichern fehlgeschlagen – ${err.message}`);
+      notify(tr('notice.foundSaveFailed'));
+    },
+  });
+  const { recovered } = found;
+  if (recovered) {
+    log(`found: Profil ${profiles.active} kaputt – ${recovered.stamp ? `Sicherung ${recovered.stamp} geladen` : 'keine Sicherung'}`);
+    const date = recovered.stamp
+      && backup.parseStamp(recovered.stamp).toLocaleString(I18n.locale(lang), { dateStyle: 'short', timeStyle: 'short' });
+    notify(recovered.stamp ? tr('notice.foundRecovered', { date }) : tr('notice.foundLost'));
+  }
+  sendToOverlay('found:all', found.list());
+}
+
+// profiles.json nicht speicherbar: im Speicher geht es weiter, Hinweis reicht
+function editProfiles(change) {
+  try {
+    return change();
+  } catch (err) {
+    log(`profile: Speichern fehlgeschlagen – ${err.message}`);
+    notify(tr('notice.profileSaveFailed'));
+    return null;
+  }
+}
+
+// Tray, Panel und Abfrage auf den neuen Stand
+function profilesChanged() {
+  sendToOverlay('settings', publicSettings());
+  updateTrayMenu();
+  sendProfiles();
+}
+
+function switchProfile(id) {
+  if (id === profiles.active || !profiles.has(id)) return;
+  found.flush();
+  editProfiles(() => profiles.setActive(id));
+  openFound();
+  log(`profile: ${id} aktiv`);
+  profilesChanged();
+  notify(tr('notice.profile', { name: profileName(id) }));
+}
+
+function removeProfile(id) {
+  const wasActive = id === profiles.active;
+  if (wasActive) found.flush();
+  const removed = editProfiles(() => profiles.remove(id, backupDir()));
+  if (removed) {
+    log(`profile: ${id} gelöscht`);
+    if (wasActive) openFound();
+  }
+  profilesChanged();
+}
+
+function openBackups() {
+  fs.mkdirSync(backupDir(), { recursive: true });
+  shell.openPath(backupDir());
+}
+
+function profileState() {
+  return {
+    language: lang,
+    active: profiles.active,
+    ask: cfg.askProfile !== false,
+    list: profiles.list.map((p) => ({
+      id: p.id,
+      name: profileName(p.id),
+      count: p.id === profiles.active ? found.ids.size : (backup.readIds(profiles.foundFile(p.id)) || []).length,
+    })),
+  };
+}
+
+function sendProfiles() {
+  if (alive(profileWin)) profileWin.webContents.send('profiles:changed', profileState());
+}
+
+// Abfrage beim Start, aus Tray und Panel: Profil wählen, umbenennen, hinzufügen, löschen
+function showProfiles() {
+  if (alive(profileWin)) {
+    profileWin.show();
+    profileWin.focus();
+    return;
+  }
+  profileWin = new BrowserWindow({
+    width: PROFILE_WIDTH,
+    height: 320,
+    useContentSize: true,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    backgroundColor: '#2a303f',
+    title: 'Genshin Map Overlay',
+    icon: ICON_PATH,
+    webPreferences: {
+      preload: path.join(__dirname, 'profiles', 'preload.js'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      spellcheck: false,
+    },
+  });
+  profileWin.setAlwaysOnTop(true, 'screen-saver');
+  if (IS_MAC) profileWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  profileWin.loadFile(path.join(__dirname, 'profiles', 'index.html'));
+  profileWin.on('closed', () => {
+    profileWin = null;
+  });
+}
+
+// Höhe misst die Seite selbst; erst danach zeigen, sonst springt das Fenster
+function fitProfiles(height) {
+  const area = targetDisplay().workArea;
+  profileWin.setContentSize(PROFILE_WIDTH, Math.round(Math.min(area.height - 40, Math.max(160, height))));
+  if (profileWin.isVisible()) return;
+  const [width, outer] = profileWin.getSize();
+  profileWin.setPosition(Math.round(area.x + (area.width - width) / 2), Math.round(area.y + (area.height - outer) / 2));
+  profileWin.show();
+  profileWin.focus();
 }
 
 // ---------- Hotkeys ----------
@@ -616,6 +767,20 @@ function updateTrayMenu() {
     { label: tr('tray.panel'), click: togglePanel, ...hotkeyLabel('togglePanel') },
     { label: tr('tray.minimap'), type: 'checkbox', checked: cfg.minimap !== false, click: (item) => setMinimap(item.checked) },
     {
+      // & ist im Menü sonst ein Tastenkürzel
+      label: tr('tray.profile', { name: profileName(profiles.active).replace(/&/g, '&&') }),
+      submenu: [
+        ...profiles.list.map((p) => ({
+          label: profileName(p.id).replace(/&/g, '&&'),
+          type: 'radio',
+          checked: p.id === profiles.active,
+          click: () => switchProfile(p.id),
+        })),
+        { type: 'separator' },
+        { label: tr('tray.manageProfiles'), click: showProfiles },
+      ],
+    },
+    {
       label: tr('tray.helperStart'),
       visible: IS_WIN && !state.helperConnected && !state.isAdmin && cfg.hotkeysEnabled,
       click: () => {
@@ -676,6 +841,7 @@ function updateTrayMenu() {
         },
         { type: 'separator' },
         { label: tr('tray.openSettings'), click: () => shell.openPath(config.filePath()) },
+        { label: tr('tray.openBackups'), click: openBackups },
         { label: tr('tray.reloadSettings'), click: reloadSettings },
       ],
     },
@@ -727,6 +893,10 @@ ipcMain.on('overlay:found-toggle', (event, id) => {
   if (!fromOverlay(event)) return;
   const isFound = found.toggle(id);
   sendToOverlay('found:changed', { id: Number(id), found: isFound });
+});
+
+ipcMain.on('overlay:profiles', (event) => {
+  if (fromOverlay(event)) showProfiles();
 });
 
 ipcMain.on('overlay:refresh-data', (event) => {
@@ -863,4 +1033,51 @@ ipcMain.on('overlay:nearby', (event, id) => {
 // Spielfigur auf der Minimap (Kartenpixel) oder null
 ipcMain.on('tracker:minimap', (event, pos) => {
   if (fromTracker(event)) sendToOverlay('minimap', pos);
+});
+
+// Profil-Abfrage
+function fromProfiles(event) {
+  return alive(profileWin) && event.sender === profileWin.webContents;
+}
+
+ipcMain.handle('profiles:state', (event) => (fromProfiles(event) ? profileState() : null));
+
+ipcMain.handle('profiles:add', (event) => {
+  if (!fromProfiles(event)) return null;
+  const id = editProfiles(() => profiles.add(''));
+  profilesChanged();
+  return { id, state: profileState() };
+});
+
+// Standardname („Profil 2“) nicht festschreiben, sonst bleibt er beim Sprachwechsel deutsch
+ipcMain.handle('profiles:rename', (event, id, name) => {
+  if (!fromProfiles(event) || typeof name !== 'string') return null;
+  const key = String(id);
+  editProfiles(() => profiles.rename(key, name.trim() === tr('profile.default', { n: key }) ? '' : name));
+  profilesChanged();
+  return profileState();
+});
+
+ipcMain.handle('profiles:remove', (event, id) => {
+  if (!fromProfiles(event)) return null;
+  removeProfile(String(id));
+  return profileState();
+});
+
+ipcMain.on('profiles:choose', (event, id) => {
+  if (!fromProfiles(event)) return;
+  switchProfile(String(id));
+  profileWin.close();
+});
+
+ipcMain.on('profiles:ask', (event, on) => {
+  if (fromProfiles(event) && typeof on === 'boolean') updateSettings({ askProfile: on });
+});
+
+ipcMain.on('profiles:close', (event) => {
+  if (fromProfiles(event)) profileWin.close();
+});
+
+ipcMain.on('profiles:height', (event, height) => {
+  if (fromProfiles(event) && Number.isFinite(height)) fitProfiles(height);
 });
