@@ -1,7 +1,7 @@
 {
   "name": "genshin-map-overlay",
   "productName": "Genshin Map Overlay",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "private": true,
   "author": "Genshin Map Overlay",
   "description": "Shows interactive map markers on the Genshin Impact in-game map via image recognition, without touching the game.",
