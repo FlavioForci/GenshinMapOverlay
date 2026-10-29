@@ -19,6 +19,8 @@ const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
 // Windows: Admin-/UIPI-Themen, Tasten-Helfer, Genshin-Start. macOS: Panel über Vollbild, Aufnahme-Freigabe
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
+// Windows fragt beim Klick, ob das Fenster aktiv werden soll
+const WM_MOUSEACTIVATE = 0x0021;
 
 let cfg;
 let lang = 'en';
@@ -220,7 +222,11 @@ function createOverlay() {
   // Aus Aufnahmen ausblenden, sonst sieht der Tracker die eigenen Marker
   overlayWin.setContentProtection(!cfg.showInCaptures);
   overlayWin.loadFile(path.join(__dirname, 'overlay', 'index.html'));
+  // Kommt nur an, wenn Chromiums Kindfenster fehlt: dann verschluckt das Overlay jeden Klick
+  if (IS_WIN) overlayWin.hookWindowMessage(WM_MOUSEACTIVATE, () => setTimeout(repairOverlay, 0));
   overlayWin.webContents.on('did-finish-load', () => {
+    // Neue Seite fängt nichts, alter Fang-Zustand darf nicht hängen bleiben
+    overlayWin.setIgnoreMouseEvents(true, { forward: true });
     sendToOverlay('settings', publicSettings());
     sendToOverlay('found:all', found.list());
     sendToOverlay('tracker:status', localizedStatus());
@@ -246,6 +252,28 @@ function showOverlay() {
   // Windows kürzt neue Fenster auf den Bereich über der Taskleiste → nochmal setzen
   placeOverlay();
   keepOnTop();
+  // Nach hide() fehlt Chromiums Kindfenster über der Seite, dann verschluckt das Overlay
+  // jeden Klick (WM_MOUSEACTIVATE). Nur neu laden bringt es zurück
+  if (IS_WIN && overlayWasHidden) {
+    overlayWasHidden = false;
+    overlayWin.webContents.reload();
+  }
+}
+
+let overlayWasHidden = false;
+function hideOverlay() {
+  if (!alive(overlayWin)) return;
+  overlayWin.hide();
+  overlayWasHidden = true;
+}
+
+// Fehlt das Kindfenster doch (z. B. nach Dialogen im Spiel): Seite neu laden, höchstens alle 5 s
+let lastRepair = 0;
+function repairOverlay() {
+  if (!alive(overlayWin) || !overlayWin.isVisible() || Date.now() - lastRepair < 5000) return;
+  lastRepair = Date.now();
+  log('overlay: Klick kam nicht an (WM_MOUSEACTIVATE) – Seite neu geladen');
+  overlayWin.webContents.reload();
 }
 
 // Aufnahmeschutz mit auffrischen: ging nach Auflösungswechseln verloren, dann sieht der Tracker die eigenen Marker
@@ -397,8 +425,8 @@ function setActive(on) {
   if (on) {
     showOverlay();
     notify(tr('notice.overlayOn'));
-  } else if (alive(overlayWin)) {
-    overlayWin.hide();
+  } else {
+    hideOverlay();
   }
 }
 
