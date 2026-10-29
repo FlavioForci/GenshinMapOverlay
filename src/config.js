@@ -24,8 +24,9 @@ const DEFAULTS = {
   hideFound: false,
   // false: Overlay fehlt in Aufnahmen, stört so auch den Tracker nicht
   showInCaptures: false,
-  // Marker auf der Minimap (Weltansicht); „in der Nähe“-Hinweis bis zu so vielen Kartenpixeln (z13)
-  minimap: true,
+  // Marker auf der Minimap (Weltansicht), aus: nur für 16:9 geprüft, an im Panel unter Einstellungen.
+  // „In der Nähe“-Hinweis bis zu so vielen Kartenpixeln (z13)
+  minimap: false,
   nearbyRadius: 7,
   opacity: 1,
   opacitySteps: [1, 0.75, 0.5],
@@ -91,4 +92,4 @@ function save(cfg) {
   writeAtomic(filePath(), JSON.stringify(out, null, 2));
 }
 
-module.exports = { load, save, filePath };
+module.exports = { load, save, filePath, DEFAULTS };

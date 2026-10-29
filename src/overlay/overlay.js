@@ -233,7 +233,8 @@ function tick(now) {
     if (velocity && now - target.at < PREDICT_MAX_MS) animating = true;
     visibility = Math.min(1, visibility + 0.25);
   } else {
-    visibility = Math.max(0, visibility - 0.2);
+    // Karte zu: Marker schnell weg (zwei Bilder), nicht über der Spielwelt stehen lassen
+    visibility = Math.max(0, visibility - 0.5);
   }
   animating = animating || (target ? visibility < 1 : visibility > 0);
   draw();
@@ -739,10 +740,16 @@ function closeLightbox() {
 
 // ---------- Panel ----------
 
-function setPanel(open) {
+// byMap: von der Karte zu- bzw. wieder aufgemacht, nicht vom Nutzer
+let panelHiddenByMap = false;
+function setPanel(open, byMap = false) {
+  if (!byMap) panelHiddenByMap = false;
   panelOpen = open;
   $('panel').classList.toggle('open', open);
-  if (!open) $('search').blur();
+  if (!open) {
+    $('search').blur();
+    stopCapture();
+  }
   // Außerhalb der Karte hält Genshin den Mauszeiger fest, ans Panel nur mit Alt.
   if (open && !target) showToast(tt('ui.altHint'));
   renderHandle();
@@ -753,20 +760,27 @@ function typeLabel(t) {
   return `${foundByType[t] || 0}/${data.types[t].count}`;
 }
 
+// Typ-Zeilen stecken in den Kategorie-Listen (auch nicht eingehängten) und in den Suchtreffern
+function typeRows(selector) {
+  const roots = [...catLists, $('results')];
+  return roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+}
+
 function updateTypeCount(t) {
-  for (const el of document.querySelectorAll(`.type-row[data-type="${t}"] .count`)) el.textContent = typeLabel(t);
+  for (const el of typeRows(`.type-row[data-type="${t}"] .count`)) el.textContent = typeLabel(t);
 }
 
 function updateCategoryHeads() {
-  for (const cat of document.querySelectorAll('.cat')) {
-    const types = cat.dataset.types.split(',').map(Number);
+  for (const tile of document.querySelectorAll('.cat-tile')) {
+    const types = tile.dataset.types.split(',').map(Number);
     const on = types.filter((t) => enabled.has(t)).length;
-    cat.querySelector('.cat-count').textContent = `${on}/${types.length}`;
-    const all = cat.querySelector('.cat-all');
+    tile.querySelector('.cat-count').textContent = `${on}/${types.length}`;
+    tile.classList.toggle('on', on > 0);
+    const all = tile.querySelector('.cat-all');
     all.checked = on === types.length;
     all.indeterminate = on > 0 && on < types.length;
   }
-  for (const box of document.querySelectorAll('.type-row input')) box.checked = enabled.has(Number(box.dataset.type));
+  for (const box of typeRows('.type-row input')) box.checked = enabled.has(Number(box.dataset.type));
   $('enabled-count').textContent = tt('ui.enabledCount', { n: enabled.size });
 }
 
@@ -783,95 +797,250 @@ const iconObserver = new IntersectionObserver((entries) => {
     iconObserver.unobserve(img);
     iconUrl(img.dataset.key).then((url) => { if (url) img.src = url; });
   }
-}, { root: document.querySelector('#panel .panel-scroll') });
+}, { root: $('panel-main') });
+
+function typeRow(t) {
+  const type = data.types[t];
+  const row = document.createElement('label');
+  row.className = 'pill type-row';
+  row.dataset.type = t;
+  row.dataset.name = type.name.toLowerCase();
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.dataset.type = t;
+  box.checked = enabled.has(t);
+  box.addEventListener('change', () => {
+    if (box.checked) enabled.add(t);
+    else enabled.delete(t);
+    saveEnabled();
+  });
+  const img = document.createElement('img');
+  img.alt = '';
+  img.dataset.key = type.key;
+  iconObserver.observe(img);
+  const name = document.createElement('span');
+  name.className = 'name';
+  name.textContent = type.name;
+  const count = document.createElement('span');
+  count.className = 'count value-box';
+  count.textContent = typeLabel(t);
+  row.append(img, name, count, box);
+  return row;
+}
+
+// Kategorien als Kacheln, 3 je Reihe; Klick klappt die Liste unter der Reihe auf (immer nur eine)
+const GRID_COLUMNS = 3;
+// „Weitere“: drei Rauten statt eines zufälligen Markers
+const MORE_ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="#3b4255" stroke="#d3bc8e" stroke-width="2"/><path d="M11 20l3-3 3 3-3 3zM17 20l3-3 3 3-3 3zM23 20l3-3 3 3-3 3z" fill="#ece5d8"/></svg>')}`;
+const catLists = [];
+let openCat = 0;
 
 function buildPanel() {
-  const root = $('categories');
-  root.textContent = '';
+  const grid = $('categories');
+  grid.textContent = '';
+  catLists.length = 0;
+  if (openCat >= data.categories.length) openCat = -1;
   data.categories.forEach((cat, index) => {
-    const section = document.createElement('section');
-    section.className = index === 0 ? 'cat open' : 'cat';
-    section.dataset.types = cat.types.join(',');
-
-    const head = document.createElement('div');
-    head.className = 'cat-head';
-    head.innerHTML = '<span class="diamond"></span><span class="cat-title"></span><span class="cat-count"></span><input class="cat-all" type="checkbox">';
-    head.querySelector('.cat-title').textContent = cat.title;
-    head.querySelector('.cat-all').title = tt('ui.categoryToggle');
-    head.addEventListener('click', (event) => {
-      if (event.target.classList.contains('cat-all')) return;
-      section.classList.toggle('open');
-    });
-    head.querySelector('.cat-all').addEventListener('change', (event) => {
+    const tile = document.createElement('div');
+    tile.className = 'cat-tile';
+    tile.dataset.types = cat.types.join(',');
+    tile.innerHTML = '<img class="cat-icon" alt=""><span class="cat-title"></span><span class="cat-count"></span><input class="cat-all" type="checkbox">';
+    tile.querySelector('.cat-title').textContent = cat.title;
+    const icon = tile.querySelector('.cat-icon');
+    if (cat.icon === null) {
+      icon.src = MORE_ICON;
+    } else {
+      icon.dataset.key = data.types[cat.icon ?? cat.types[0]].key;
+      iconObserver.observe(icon);
+    }
+    const all = tile.querySelector('.cat-all');
+    all.title = tt('ui.categoryToggle');
+    all.addEventListener('change', () => {
       for (const t of cat.types) {
-        if (event.target.checked) enabled.add(t);
+        if (all.checked) enabled.add(t);
         else enabled.delete(t);
       }
       saveEnabled();
     });
+    tile.addEventListener('click', (event) => {
+      if (event.target === all) return;
+      openCat = openCat === index ? -1 : index;
+      placeOpenList();
+    });
+    grid.append(tile);
 
     const list = document.createElement('div');
     list.className = 'cat-list';
-    for (const t of cat.types) {
-      const type = data.types[t];
-      const row = document.createElement('label');
-      row.className = 'pill type-row';
-      row.dataset.type = t;
-      row.dataset.name = type.name.toLowerCase();
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.dataset.type = t;
-      box.addEventListener('change', () => {
-        if (box.checked) enabled.add(t);
-        else enabled.delete(t);
-        saveEnabled();
-      });
-      const img = document.createElement('img');
-      img.alt = '';
-      img.dataset.key = type.key;
-      iconObserver.observe(img);
-      const name = document.createElement('span');
-      name.className = 'name';
-      name.textContent = type.name;
-      const count = document.createElement('span');
-      count.className = 'count value-box';
-      count.textContent = typeLabel(t);
-      row.append(img, name, count, box);
-      list.append(row);
-    }
-    section.append(head, list);
-    root.append(section);
+    list.append(...cat.types.map(typeRow));
+    catLists.push(list);
   });
+  placeOpenList();
   updateCategoryHeads();
   applySearch();
 }
 
+// Offene Liste hinter die letzte Kachel ihrer Reihe, über die ganze Breite
+function placeOpenList() {
+  for (const list of catLists) list.remove();
+  const tiles = [...$('categories').querySelectorAll('.cat-tile')];
+  tiles.forEach((tile, i) => tile.classList.toggle('open', i === openCat));
+  if (openCat < 0 || !tiles[openCat]) return;
+  const rowEnd = Math.min(tiles.length, (Math.floor(openCat / GRID_COLUMNS) + 1) * GRID_COLUMNS) - 1;
+  tiles[rowEnd].after(catLists[openCat]);
+}
+
+// Suche: statt Kacheln alle Treffer, nach Kategorie gruppiert
 function applySearch() {
   const query = $('search').value.trim().toLowerCase();
-  let any = false;
-  for (const section of document.querySelectorAll('.cat')) {
-    let matches = 0;
-    for (const row of section.querySelectorAll('.type-row')) {
-      const hit = !query || row.dataset.name.includes(query);
-      row.hidden = !hit;
-      if (hit) matches++;
-    }
-    section.hidden = query && matches === 0;
-    if (query && matches) section.classList.add('open');
-    any = any || matches > 0;
+  const results = $('results');
+  results.textContent = '';
+  $('categories').hidden = !!query;
+  results.hidden = !query;
+  if (!query || !data) return;
+  for (const cat of data.categories) {
+    const hits = cat.types.filter((t) => data.types[t].name.toLowerCase().includes(query));
+    if (!hits.length) continue;
+    const head = document.createElement('div');
+    head.className = 'result-head';
+    head.textContent = cat.title;
+    results.append(head, ...hits.map(typeRow));
   }
-  let empty = $('categories').querySelector('.empty');
-  if (!any && query) {
-    if (!empty) {
-      empty = document.createElement('div');
-      empty.className = 'empty';
-      $('categories').append(empty);
-    }
+  if (!results.children.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
     empty.textContent = tt('ui.noResults', { query: $('search').value.trim() });
-  } else if (empty) {
-    empty.remove();
+    results.append(empty);
   }
 }
+
+// ---------- Einstellungen: Tasten, Markerdaten ----------
+
+const KEY_ACTIONS = ['toggleOverlay', 'togglePanel', 'toggleFound', 'cycleOpacity', 'markNearby'];
+let settingsOpen = false;
+// Aktion, deren Taste gerade aufgenommen wird; Meldung unter der Liste
+let capturing = null;
+let keyNote = null;
+
+function setSettingsView(open) {
+  if (!open) stopCapture();
+  settingsOpen = open;
+  keyNote = null;
+  $('panel-main').hidden = open;
+  $('settings-view').hidden = !open;
+  $('open-settings').classList.toggle('active', open);
+  $('settings-label').textContent = tt(open ? 'ui.back' : 'ui.settings');
+  if (open) renderKeys();
+}
+
+function renderKeys() {
+  const list = $('key-list');
+  list.textContent = '';
+  const keys = settings.keybinds || {};
+  const failed = settings.hotkeyErrors || [];
+  for (const name of KEY_ACTIONS) {
+    const row = document.createElement('div');
+    row.className = 'pill key-row';
+    const label = document.createElement('span');
+    label.className = 'setting-name';
+    label.textContent = tt(`hotkey.${name}`);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'key-btn';
+    if (capturing === name) {
+      button.classList.add('capturing');
+      button.textContent = tt('ui.keyPress');
+    } else {
+      button.textContent = keys[name] || tt('ui.keyNone');
+      button.classList.toggle('error', !!keys[name] && failed.includes(keys[name]));
+    }
+    button.addEventListener('click', () => (capturing === name ? stopCapture() : startCapture(name)));
+    row.append(label, button);
+    list.append(row);
+  }
+  const unavailable = KEY_ACTIONS.filter((name) => keys[name] && failed.includes(keys[name])).map((name) => keys[name]);
+  let note = keyNote;
+  if (!note && settings.hotkeysEnabled === false) note = { text: tt('ui.keysDisabled'), error: true };
+  if (!note && unavailable.length) note = { text: tt('ui.keyUnavailable', { key: unavailable.join(', ') }), error: true };
+  $('key-hint').textContent = note ? note.text : tt('ui.keysHint');
+  $('key-hint').classList.toggle('error', !!(note && note.error));
+}
+
+// Tasten im Spiel sind solange abgemeldet, sonst schnappt sich RegisterHotKey z. B. F7 vor dem Fenster
+function startCapture(name) {
+  capturing = name;
+  keyNote = null;
+  api.captureKeys(true);
+  api.keyboard(true);
+  renderKeys();
+}
+
+function stopCapture() {
+  if (!capturing) return;
+  capturing = null;
+  api.captureKeys(false);
+  api.keyboard(false);
+  if (settingsOpen) renderKeys();
+}
+
+// KeyboardEvent → Electron-Kürzel. F-Tasten allein, sonst nur mit Strg/Alt/Umschalt: die Taste fehlt sonst im Spiel
+const CODE_KEYS = {
+  ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Space: 'Space', Tab: 'Tab',
+  Insert: 'Insert', Delete: 'Delete', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Backspace: 'Backspace',
+  Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'",
+  Comma: ',', Period: '.', Slash: '/', Backquote: '`',
+  NumpadAdd: 'numadd', NumpadSubtract: 'numsub', NumpadMultiply: 'nummult', NumpadDivide: 'numdiv', NumpadDecimal: 'numdec',
+};
+
+function accelerator(event) {
+  let key = CODE_KEYS[event.code];
+  let match;
+  if (!key && (match = /^(F(?:[1-9]|1\d|2[0-4]))$/.exec(event.code))) key = match[1];
+  if (!key && (match = /^Key([A-Z])$/.exec(event.code))) key = match[1];
+  if (!key && (match = /^Digit(\d)$/.exec(event.code))) key = match[1];
+  if (!key && (match = /^Numpad(\d)$/.exec(event.code))) key = `num${match[1]}`;
+  if (!key) return null;
+  const mods = [event.ctrlKey && 'Ctrl', event.altKey && 'Alt', event.shiftKey && 'Shift', event.metaKey && 'Super'].filter(Boolean);
+  if (!mods.length && !/^F\d+$/.test(key)) return null;
+  const accel = [...mods, key].join('+');
+  return accel === 'Alt+F4' ? null : accel;
+}
+
+async function assignKey(name, accel) {
+  const result = await api.setHotkey(name, accel);
+  if (result && result.error === 'taken') {
+    keyNote = { text: tt('ui.keyTaken', { key: accel, action: tt(`hotkey.${result.other}`) }), error: true };
+  } else if (!result || result.error) {
+    keyNote = { text: tt('ui.keyInvalid'), error: true };
+  }
+  stopCapture();
+  renderKeys();
+}
+
+window.addEventListener('keydown', (event) => {
+  if (!capturing) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === 'Escape') {
+    stopCapture();
+    return;
+  }
+  if (['Control', 'Alt', 'Shift', 'Meta', 'AltGraph'].includes(event.key)) return;
+  const plain = !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+  if (plain && (event.key === 'Delete' || event.key === 'Backspace')) {
+    assignKey(capturing, '');
+    return;
+  }
+  const accel = accelerator(event);
+  if (!accel) {
+    keyNote = { text: tt('ui.keyInvalid'), error: true };
+    renderKeys();
+    return;
+  }
+  assignKey(capturing, accel);
+}, true);
+
+// Fenster verliert den Fokus (Klick ins Spiel) → Aufnahme abbrechen
+window.addEventListener('blur', stopCapture);
 
 function renderStatus() {
   const phase = trackerStatus.phase;
@@ -909,19 +1078,10 @@ function renderSettings() {
   $('size-value').textContent = `${settings.markerSize} px`;
   updateRangeFill($('opacity'));
   updateRangeFill($('size'));
-  $('profile-info').textContent = tt('ui.profile', { name: settings.profile || '' });
-  const hk = settings.hotkeys || {};
-  $('kbd-found').textContent = hk.toggleFound || '';
-  const keys = [
-    hk.toggleOverlay && `${hk.toggleOverlay} ${tt('ui.key.toggleOverlay')}`,
-    hk.togglePanel && `${hk.togglePanel} ${tt('ui.key.togglePanel')}`,
-    hk.toggleFound && `${hk.toggleFound} ${tt('ui.key.toggleFound')}`,
-    hk.cycleOpacity && `${hk.cycleOpacity} ${tt('ui.key.cycleOpacity')}`,
-    hk.markNearby && `${hk.markNearby} ${tt('ui.key.markNearby')}`,
-  ].filter(Boolean).join(' · ');
-  const errors = settings.hotkeyErrors || [];
-  $('keys').textContent = errors.length ? `${keys} – ${tt('ui.keysUnavailable', { keys: errors.join(', ') })}` : keys;
-  $('keys').classList.toggle('error', errors.length > 0);
+  $('profile-info').textContent = settings.profile || '';
+  $('kbd-found').textContent = (settings.hotkeys || {}).toggleFound || '';
+  $('settings-label').textContent = tt(settingsOpen ? 'ui.back' : 'ui.settings');
+  if (settingsOpen) renderKeys();
 }
 
 function renderDataInfo() {
@@ -935,6 +1095,12 @@ function renderDataInfo() {
 
 $('close-panel').addEventListener('click', () => setPanel(false));
 $('switch-profile').addEventListener('click', () => api.profiles());
+$('open-settings').addEventListener('click', () => setSettingsView(!settingsOpen));
+$('keys-reset').addEventListener('click', async () => {
+  stopCapture();
+  keyNote = null;
+  await api.resetHotkeys();
+});
 $('panel-handle').addEventListener('click', () => setPanel(true));
 $('close-spot').addEventListener('click', closeSpot);
 $('lightbox').addEventListener('click', closeLightbox);
@@ -1058,12 +1224,22 @@ api.on('view', (next) => {
   if (wasLocked !== !!target) {
     renderStatus();
     renderHandle();
-    // Verzögert: beim schnellen Ziehen geht die Karte oft nur kurz verloren
     clearTimeout(spotCloseTimer);
-    if (!target && spot) {
+    if (!target && next.closed) {
+      // Karte zu: Fundort-Karte, Foto und Panel sofort weg; das Panel kommt mit der Karte wieder
+      if (spot) closeSpot();
+      if (panelOpen) {
+        setPanel(false, true);
+        panelHiddenByMap = true;
+      }
+    } else if (!target && spot) {
+      // Verzögert: beim schnellen Ziehen geht die Karte oft nur kurz verloren
       spotCloseTimer = setTimeout(() => {
         if (!target) closeSpot();
       }, 1500);
+    } else if (target && panelHiddenByMap) {
+      setPanel(true, true);
+      panelHiddenByMap = false;
     }
   }
   requestDraw();

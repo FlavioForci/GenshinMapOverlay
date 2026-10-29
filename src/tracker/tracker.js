@@ -297,7 +297,8 @@ function report(res, width, height) {
       mode: res.mode,
     });
   } else if (locked) {
-    api.view({ locked: false });
+    // closed: ganz anderes Bild (Karte sicher zu), nicht nur kurz beim Ziehen verloren
+    api.view({ locked: false, closed: !!(res && res.scene) });
   }
   locked = nowLocked;
 }
@@ -339,8 +340,10 @@ async function loop() {
           if (wasLocked) {
             lostFrame = { data: new Uint8ClampedArray(img.data), width: img.width, height: img.height, lastS: prior.s };
             unlockedSince = now;
+            // Karte sicher zu (ganz anderes Bild): nicht noch 3 s im Nachführ-Takt suchen
+            if (res.scene) lastLockAt = 0;
           }
-          report(null);
+          report(res);
         }
       }
       if (core.locked || !minimapOn) {

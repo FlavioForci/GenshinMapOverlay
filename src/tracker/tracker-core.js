@@ -18,7 +18,32 @@
     trustInliers: 0,
     // (img, prior) → Promise<Ergebnis wie Matcher.locate>, z. B. Worker; null = im selben Bild prüfen
     check: null,
+    // Farbverteilung so weit weg vom letzten Kartenbild → Karte zu, sofort loslassen (0 = aus).
+    // Aufnahmen: Ziehen/Zoomen ≤ 0,28, Karte schließen 0,56–0,76
+    sceneCut: 0.4,
   };
+
+  // Grobe Farbverteilung (4×4×4 Fächer), jedes 8. Pixel
+  function colorHist(data, width, height) {
+    const h = new Float32Array(64);
+    let n = 0;
+    for (let y = 0; y < height; y += 8) {
+      for (let x = 0; x < width; x += 8) {
+        const i = (y * width + x) * 4;
+        h[((data[i] >> 6) << 4) | ((data[i + 1] >> 6) << 2) | (data[i + 2] >> 6)]++;
+        n++;
+      }
+    }
+    for (let k = 0; k < 64; k++) h[k] /= n;
+    return h;
+  }
+
+  // Bhattacharyya-Abstand: 0 gleich … 1 ganz verschieden
+  function histDistance(a, b) {
+    let s = 0;
+    for (let k = 0; k < 64; k++) s += Math.sqrt(a[k] * b[k]);
+    return Math.sqrt(Math.max(0, 1 - s));
+  }
 
   // Ansicht als Abbildung Karte → Bild: p = s * m + t
   function compose(a, b) {
@@ -40,6 +65,7 @@
 
     reset() {
       this.prior = null;
+      this.hist = null;
       this.lostFrames = 0;
       this.lastCheck = -Infinity;
       this.driftHits = 0;
@@ -55,6 +81,12 @@
     // img = { data (RGBA), width, height }, now in ms → Ergebnis wie Matcher.locate
     step(img, now) {
       const { data, width, height } = img;
+      const hist = this.o.sceneCut > 0 ? colorHist(data, width, height) : null;
+      if (this.prior && hist && this.hist && histDistance(this.hist, hist) > this.o.sceneCut) {
+        // Karte zu: nicht erst lostAfter Fehlbilder abwarten, Marker sonst ~0,7 s über der Welt
+        this.lose();
+        return { ok: false, scene: true };
+      }
       let res = this.prior && this.flow.active ? this.follow(img, now) : null;
       if (!res || !res.ok) {
         res = this.matcher.locate(data, width, height, this.prior);
@@ -64,16 +96,22 @@
       }
       if (res.ok) {
         this.prior = res;
+        this.hist = hist;
         this.lostFrames = 0;
       } else if (this.prior && ++this.lostFrames < this.o.lostAfter) {
         // Aussetzer: Ansicht halten
       } else {
-        this.prior = null;
-        this.pending = null;
-        this.correction = null;
-        this.flow.reset();
+        this.lose();
       }
       return res;
+    }
+
+    lose() {
+      this.prior = null;
+      this.hist = null;
+      this.pending = null;
+      this.correction = null;
+      this.flow.reset();
     }
 
     anchor(img, res, now) {

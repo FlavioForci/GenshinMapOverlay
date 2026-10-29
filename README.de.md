@@ -62,8 +62,9 @@ wie die Windows-Version, bitte melde Auffälligkeiten im [Discord](https://disco
 
 - **Linksklick auf einen Marker:** die Fundort-Karte zeigt Foto oder Video. Klick aufs Foto vergrößert es.
 - **Rechtsklick auf einen Marker:** als gefunden markieren (oder wieder offen).
-- **Panel:** Markerarten anhaken, nach Namen suchen, Größe und Deckkraft einstellen. Es geht auch über
-  den Reiter **Marker** am rechten Kartenrand auf.
+- **Panel:** Klick auf eine Kategorie-Kachel klappt ihre Markerarten auf; anhaken, nach Namen suchen. Unten
+  unter **Einstellungen**: Größe, Deckkraft, Minimap-Marker, Screenshots und Tasten. Es geht auch über den
+  Reiter **Marker** am rechten Kartenrand auf.
 - Klicks neben die Marker gehen ganz normal ans Spiel (ziehen, zoomen, Wegpunkte setzen).
 - Außerhalb der Karte hält das Spiel die Maus fest. Dort **Alt** gedrückt halten, um im Panel zu klicken.
 
@@ -82,12 +83,13 @@ Gefundene Marker werden nur auf deinem PC gespeichert (`%APPDATA%\Genshin Map Ov
 
 ### Minimap
 
+- Standardmäßig aus. Einschalten im Panel unter **Einstellungen** (**Marker auf der Minimap**) oder im
+  Tray-Menü.
 - Nach dem Start des Overlays oder nach einem Teleport einmal mit **M** die Karte öffnen und wieder
   schließen. Die Karte öffnet sich auf deine Figur zentriert, so weiß das Overlay, wo du bist, und zeigt
   die angehakten Markerarten auch auf der Minimap.
 - Geh nah an einen Marker heran: Er bekommt einen Ring, und neben der Minimap erscheint ein Hinweis.
   **Alt+E** markiert ihn als gefunden. Die Taste ist nur belegt, solange der Hinweis zu sehen ist.
-- Ausschalten im Panel oder im Tray-Menü (**Marker auf der Minimap**).
 - Geprüft mit 16:9-Auflösungen im Vollbild oder randlos. Im Fenstermodus oder bei anderen
   Seitenverhältnissen (16:10, 21:9) erscheinen die Minimap-Marker eventuell noch nicht; die Marker auf
   der Karte funktionieren überall.
@@ -124,11 +126,11 @@ Tray-Menü → **Erweitert** → **Einstellungsdatei öffnen**, danach **Einstel
 
 | Schlüssel | Bedeutung |
 |---|---|
-| `hotkeys` | Tasten, z. B. `"F7"`, `"Alt+M"`, `"Ctrl+Shift+F1"` |
-| `markerSize` | Markergröße in Pixeln bei 1080p (auch im Panel) |
+| `hotkeys` | Tasten, z. B. `"F7"`, `"Alt+M"`, `"Ctrl+Shift+F1"` (einfacher: Panel → **Einstellungen**) |
+| `markerSize` | Markergröße in Pixeln bei 1080p (auch in den Panel-Einstellungen) |
 | `language` | `"de"` oder `"en"`; leer = aus dem Setup bzw. von Windows |
-| `showInCaptures` | `true` = Overlay ist in Screenshots, Aufnahmen und Streams zu sehen (auch im Panel) |
-| `minimap` | `false` = keine Marker auf der Minimap (auch im Panel und im Tray-Menü) |
+| `showInCaptures` | `true` = Overlay ist in Screenshots, Aufnahmen und Streams zu sehen (auch in den Panel-Einstellungen) |
+| `minimap` | `true` = Marker auf der Minimap, standardmäßig aus (auch in den Panel-Einstellungen und im Tray-Menü) |
 | `nearbyRadius` | Wie nah ein Marker für den Alt+E-Hinweis sein muss, in Kartenpixeln (Standard 7) |
 | `askProfile` | `false` = beim Start nicht nach dem Profil fragen (auch im Profil-Fenster) |
 | `genshinPath` | Pfad zur `GenshinImpact.exe`, falls sie nicht automatisch gefunden wird |

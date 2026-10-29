@@ -307,11 +307,14 @@ function decodeMarkers(json, names, lang = 'de') {
   const categories = CATEGORIES.map((cat) => {
     const items = cat.items.filter((key) => typeIndex.has(key)).map((key) => typeIndex.get(key));
     items.forEach((t) => categorized.add(t));
-    return { key: cat.key, title: cat.title[lang] || cat.title.en, farm: !!cat.farm, types: items };
+    // icon: Typ, dessen Bild die Kachel im Panel zeigt
+    const icon = typeIndex.has(cat.icon) ? typeIndex.get(cat.icon) : items[0];
+    return { key: cat.key, title: cat.title[lang] || cat.title.en, farm: !!cat.farm, icon, types: items };
   }).filter((cat) => cat.types.length);
   const rest = types.map((_, i) => i).filter((i) => !categorized.has(i));
   rest.sort((a, b) => types[a].name.localeCompare(types[b].name, lang));
-  if (rest.length) categories.push({ key: 'other', title: lang === 'de' ? 'Weitere' : 'Other', types: rest });
+  // Weitere: kein typischer Marker, das Panel zeigt ein eigenes Symbol
+  if (rest.length) categories.push({ key: 'other', title: lang === 'de' ? 'Weitere' : 'Other', icon: null, types: rest });
 
   return { types, categories, markers };
 }

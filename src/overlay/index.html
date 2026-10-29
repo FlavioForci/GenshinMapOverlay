@@ -59,26 +59,32 @@
       </button>
     </header>
 
-    <div class="panel-scroll">
+    <div id="panel-main" class="panel-scroll">
       <div id="status" class="pill status" data-state="search">
         <span class="dot"></span>
         <span id="status-text"></span>
       </div>
 
-      <div class="section-head"><h2 data-i18n="ui.sectionDisplay"></h2></div>
       <label class="pill setting">
         <span class="setting-name" data-i18n="ui.hideFound"></span>
         <kbd id="kbd-found"></kbd>
         <input id="hide-found" type="checkbox">
       </label>
-      <label class="pill setting" data-i18n-title="ui.minimapHint">
-        <span class="setting-name" data-i18n="ui.minimap"></span>
-        <input id="minimap" type="checkbox">
-      </label>
-      <label class="pill setting" data-i18n-title="ui.showInCapturesHint">
-        <span class="setting-name" data-i18n="ui.showInCaptures"></span>
-        <input id="show-captures" type="checkbox">
-      </label>
+
+      <div class="section-head">
+        <h2 data-i18n="ui.sectionMarkers"></h2>
+        <span id="enabled-count"></span>
+        <button id="none" class="link-btn" type="button" data-i18n="ui.none"></button>
+      </div>
+      <input id="search" class="search" type="search" data-i18n-placeholder="ui.search" autocomplete="off" spellcheck="false">
+      <!-- Kacheln, die offene Liste steht hinter der letzten Kachel ihrer Reihe -->
+      <div id="categories" class="cat-grid"></div>
+      <div id="results" class="results" hidden></div>
+    </div>
+
+    <!-- Einstellungen: ersetzt die Liste, Kopf und Fuß bleiben -->
+    <div id="settings-view" class="panel-scroll" hidden>
+      <div class="section-head"><h2 data-i18n="ui.sectionDisplay"></h2></div>
       <label class="pill setting">
         <span class="setting-name" data-i18n="ui.opacity"></span>
         <output id="opacity-value" class="value-box"></output>
@@ -89,26 +95,40 @@
         <output id="size-value" class="value-box"></output>
         <input id="size" type="range" min="14" max="48" step="2">
       </label>
+      <label class="pill setting" data-i18n-title="ui.showInCapturesHint">
+        <span class="setting-name" data-i18n="ui.showInCaptures"></span>
+        <input id="show-captures" type="checkbox">
+      </label>
+      <label class="pill setting" data-i18n-title="ui.minimapHint">
+        <span class="setting-name" data-i18n="ui.minimap"></span>
+        <input id="minimap" type="checkbox">
+      </label>
 
       <div class="section-head">
-        <h2 data-i18n="ui.sectionMarkers"></h2>
-        <span id="enabled-count"></span>
-        <button id="none" class="link-btn" type="button" data-i18n="ui.none"></button>
+        <h2 data-i18n="ui.sectionKeys"></h2>
+        <button id="keys-reset" class="link-btn" type="button" data-i18n="ui.keysReset"></button>
       </div>
-      <input id="search" class="search" type="search" data-i18n-placeholder="ui.search" autocomplete="off" spellcheck="false">
-      <div id="categories" class="categories"></div>
+      <div id="key-list"></div>
+      <p id="key-hint" class="hint"></p>
+
+      <div class="section-head"><h2 data-i18n="ui.sectionData"></h2></div>
+      <div class="pill info-row">
+        <span id="data-info" class="setting-name" data-i18n="ui.loadingData"></span>
+        <button id="refresh" class="pill-btn" type="button" data-i18n="ui.refresh"></button>
+      </div>
     </div>
 
     <footer class="panel-foot">
-      <div class="foot-row">
-        <span id="data-info" data-i18n="ui.loadingData"></span>
-        <button id="refresh" class="link-btn" type="button" data-i18n="ui.refresh"></button>
-      </div>
-      <div class="foot-row">
-        <span id="profile-info"></span>
-        <button id="switch-profile" class="link-btn" type="button" data-i18n="ui.switchProfile"></button>
-      </div>
-      <div id="keys" class="keys"></div>
+      <button id="switch-profile" class="foot-btn profile-btn" type="button" data-i18n-title="ui.switchProfile">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5z"/></svg>
+        <span class="foot-text"><small data-i18n="ui.profileLabel"></small><span id="profile-info"></span></span>
+        <svg class="swap" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3 1.4-1.4L21.8 8l-5.4 5.4L15 12l3-3H7zm10 10H6l3 3-1.4 1.4L2.2 16l5.4-5.4L9 12l-3 3h11z"/></svg>
+      </button>
+      <button id="open-settings" class="foot-btn settings-btn" type="button">
+        <svg class="icon-back" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg>
+        <svg class="icon-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.1 7.1 0 0 0 0-1.88l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7 7 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.47.47 0 0 0-.47.41l-.36 2.54a7.3 7.3 0 0 0-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58a7.1 7.1 0 0 0 0 1.88l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7 7 0 0 0 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+        <span id="settings-label" data-i18n="ui.settings"></span>
+      </button>
     </footer>
   </aside>
 

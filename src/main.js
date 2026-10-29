@@ -42,6 +42,8 @@ const state = {
   helperConnected: false,
   // Marker-Id, die das Overlay gerade „in der Nähe“ anbietet (Nähe-Taste), sonst null
   nearby: null,
+  // Panel nimmt gerade eine neue Taste auf: Kürzel solange abgemeldet
+  keyCapture: false,
 };
 
 const tr = (key, params) => I18n.t(lang, key, params);
@@ -225,6 +227,10 @@ function createOverlay() {
   // Kommt nur an, wenn Chromiums Kindfenster fehlt: dann verschluckt das Overlay jeden Klick
   if (IS_WIN) overlayWin.hookWindowMessage(WM_MOUSEACTIVATE, () => setTimeout(repairOverlay, 0));
   overlayWin.webContents.on('did-finish-load', () => {
+    if (state.keyCapture) {
+      state.keyCapture = false;
+      registerHotkeys();
+    }
     // Neue Seite fängt nichts, alter Fang-Zustand darf nicht hängen bleiben
     overlayWin.setIgnoreMouseEvents(true, { forward: true });
     sendToOverlay('settings', publicSettings());
@@ -353,6 +359,9 @@ function publicSettings() {
   return {
     language: lang,
     hotkeys: cfg.hotkeysEnabled ? cfg.hotkeys : {},
+    // Belegung fürs Einstellungen-Panel, auch wenn Hotkeys aus sind
+    keybinds: cfg.hotkeys,
+    hotkeysEnabled: cfg.hotkeysEnabled,
     hotkeyErrors: state.hotkeyErrors.map((name) => cfg.hotkeys[name]),
     enabledTypes: cfg.enabledTypes,
     hideFound: cfg.hideFound,
@@ -710,7 +719,7 @@ function markNearby() {
 
 // Nähe-Taste nur, solange das Overlay einen Marker anbietet: sonst bleibt sie für Spiel und andere Programme frei
 function activeHotkeys() {
-  if (!cfg.hotkeysEnabled) return {};
+  if (!cfg.hotkeysEnabled || state.keyCapture) return {};
   const { markNearby: nearbyKey, ...rest } = cfg.hotkeys;
   return state.nearby !== null && cfg.active && nearbyKey ? { ...rest, markNearby: nearbyKey } : rest;
 }
@@ -893,7 +902,40 @@ ipcMain.on('overlay:mouse', (event, capture) => {
   overlayWin.setIgnoreMouseEvents(!capture, { forward: true });
 });
 
-// Fokus nur fürs Suchfeld, danach zurück ans Spiel
+// Tasten im Panel ändern. F-Tasten allein, sonst mit Modifier (die Taste fehlte sonst im Spiel);
+// von anderen Programmen belegt zeigt registerHotkeys als Fehler
+const HOTKEY_NAMES = Object.keys(config.DEFAULTS.hotkeys);
+const ACCELERATOR = /^((Ctrl|Alt|Shift|Super)\+)*(F([1-9]|1\d|2[0-4])|[A-Z0-9]|num[0-9]|numadd|numsub|nummult|numdiv|numdec|Up|Down|Left|Right|Space|Tab|Insert|Delete|Home|End|PageUp|PageDown|Backspace|[-=[\]\\;',./`])$/;
+
+function validAccelerator(accel) {
+  return ACCELERATOR.test(accel) && (accel.includes('+') || /^F\d+$/.test(accel)) && accel !== 'Alt+F4';
+}
+
+ipcMain.handle('overlay:hotkey', (event, name, accelerator) => {
+  if (!fromOverlay(event) || !HOTKEY_NAMES.includes(name) || typeof accelerator !== 'string') return { error: 'invalid' };
+  if (accelerator && !validAccelerator(accelerator)) return { error: 'invalid' };
+  const other = accelerator && HOTKEY_NAMES.find((n) => n !== name && cfg.hotkeys[n] === accelerator);
+  if (other) return { error: 'taken', other };
+  log(`hotkeys: ${name} = ${accelerator || '(keine)'}`);
+  updateSettings({ hotkeys: { ...cfg.hotkeys, [name]: accelerator } });
+  registerHotkeys();
+  return { ok: true };
+});
+
+ipcMain.handle('overlay:hotkeys-reset', (event) => {
+  if (!fromOverlay(event)) return null;
+  updateSettings({ hotkeys: { ...config.DEFAULTS.hotkeys } });
+  registerHotkeys();
+  return { ok: true };
+});
+
+ipcMain.on('overlay:key-capture', (event, on) => {
+  if (!fromOverlay(event) || state.keyCapture === !!on) return;
+  state.keyCapture = !!on;
+  registerHotkeys();
+});
+
+// Fokus nur fürs Suchfeld und die Tastenaufnahme, danach zurück ans Spiel
 ipcMain.on('overlay:keyboard', (event, wanted) => {
   if (!fromOverlay(event)) return;
   overlayWin.setFocusable(wanted);
