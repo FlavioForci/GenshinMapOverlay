@@ -1,9 +1,9 @@
 // Teyvat-Kartenkacheln der externen Quelle.
 // Neue Version → in settings.json unter "tileset" überschreiben.
 module.exports = {
-  version: 'v70-rc1',
-  url: 'https://game-cdn.appsample.com/gim/map-teyvat/v70-rc1/{z}/tile-{x}_{y}.jpg',
-  blackTiles: 'https://game-cdn.appsample.com/gim/map-teyvat/v70-rc1/black-tile.json',
+  version: 'v72-rc1',
+  url: 'https://game-cdn.appsample.com/gim/map-teyvat/v72-rc1/{z}/tile-{x}_{y}.jpg',
+  blackTiles: 'https://game-cdn.appsample.com/gim/map-teyvat/v72-rc1/black-tile.json',
   minZoom: 10,
   maxZoom: 15,
   // Kachelbereich je Zoomstufe, in URL-Koordinaten

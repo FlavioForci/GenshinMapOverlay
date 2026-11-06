@@ -119,7 +119,10 @@ function main() {
   const markerCount = data.markers.count;
 
   const referenceKey = `refdb-v1-${TILESET.version}-${REFERENCE_LEVELS.join('_')}`;
-  const referenceBuf = fs.readFileSync(path.join(SOURCE, 'reference', `${referenceKey}.bin`));
+  // Fehlt die Referenz zur neuen Kachelversion → kein Paket-Eintrag, die App baut sie selbst
+  const referencePath = path.join(SOURCE, 'reference', `${referenceKey}.bin`);
+  const referenceBuf = fs.existsSync(referencePath) ? fs.readFileSync(referencePath) : null;
+  if (!referenceBuf) console.log(`  Referenz ${referenceKey} fehlt → wird nicht ins Paket aufgenommen`);
 
   // Fehlende Symbole lädt das Overlay weiter von der Quelle nach.
   const iconDir = path.join(SOURCE, 'icons');
@@ -138,12 +141,14 @@ function main() {
     markers: writeHashed('markers', 'markers', '.json', markersBuf),
     names: writeHashed('markers', 'names', '.json', namesBuf),
     icons: { dir: 'icons', available: icons.map((f) => f.replace('.png', '')) },
-    reference: {
-      key: referenceKey,
-      file: writeHashed('reference', referenceKey, '.bin', referenceBuf),
-      levels: REFERENCE_LEVELS,
-      tileset: TILESET.version,
-    },
+    reference: referenceBuf
+      ? {
+          key: referenceKey,
+          file: writeHashed('reference', referenceKey, '.bin', referenceBuf),
+          levels: REFERENCE_LEVELS,
+          tileset: TILESET.version,
+        }
+      : null,
     comments,
     photos: { dir: 'photos', count: usedPhotos.size },
     // Nur für noch nicht importierte Fotos.
@@ -156,7 +161,7 @@ function main() {
   walk(OUT);
   const bytes = files.reduce((n, f) => n + fs.statSync(f).size, 0);
   console.log(`Datenpaket: ${files.length} Dateien, ${(bytes / 1e6).toFixed(1)} MB → ${OUT}`);
-  console.log(`  Marker ${markerCount}, Symbole ${icons.length}, Referenz ${referenceKey}`);
+  console.log(`  Marker ${markerCount}, Symbole ${icons.length}, Referenz ${referenceBuf ? referenceKey : 'keine'}`);
   console.log(`  Fundorte: ${comments ? `${comments.queried}/${comments.wanted} abgefragt (ohne Farm-Arten), ${comments.markers} mit Fotos, Video oder Tipp, vollständig: ${comments.complete}` : 'noch nicht importiert'}`);
   console.log(`  Fotos im Paket ${usedPhotos.size} (importiert ${photos.size})`);
   if (files.length > PAGES_FILE_LIMIT * 0.95) {
